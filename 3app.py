@@ -4,178 +4,193 @@ import numpy as np
 import plotly.graph_objects as go
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
-import re
-import os
+import re, os
+from streamlit.components.v1 import html
 
-# --- CHEMICAL LIBRARIES SAFETY ---
+# -------------------- OPTIONAL CHEM LIBS --------------------
 try:
     from rdkit import Chem
     from rdkit.Chem import Draw
     import pubchempy as pcp
     HAS_CHEM_LIBS = True
-except ImportError:
+except:
     HAS_CHEM_LIBS = False
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="NanoPredict AI v9.0", layout="wide")
+# -------------------- PAGE CONFIG --------------------
+st.set_page_config(page_title="NanoPredict AI v9.1", layout="wide")
 
-# --- CUSTOM CSS ---
+# -------------------- CUSTOM CSS --------------------
 st.markdown("""
-    <style>
-    .metric-card {
-        background: #ffffff; padding: 22px; border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 10px solid #28a745;
-        margin-bottom: 20px;
-    }
-    .m-label { font-size: 14px; color: #555; font-weight: 600; text-transform: uppercase; }
-    .m-value { font-size: 26px; color: #000; font-weight: 800; white-space: nowrap; }
-    .model-box { 
-        background: #1e272e; color: #ffffff; padding: 25px; 
-        border-radius: 15px; border-top: 5px solid #00d8d6;
-    }
-    .locked-msg { text-align: center; padding: 50px; color: #a0aec0; font-style: italic; }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+.metric-card {
+    background:#ffffff; padding:20px; border-radius:12px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    border-left:8px solid #00d8d6; margin-bottom:16px;
+}
+.m-label { font-size:13px; color:#555; font-weight:600; }
+.m-value { font-size:26px; font-weight:800; }
+.model-box {
+    background:#1e272e; color:#fff; padding:22px;
+    border-radius:14px; border-top:4px solid #00d8d6;
+}
+.locked-msg {
+    text-align:center; padding:60px;
+    font-style:italic; color:#a0aec0;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# --- 1. DATA ENGINE ---
+# -------------------- DATA + MODEL --------------------
 @st.cache_data
 def load_and_prep():
-    csv_file = 'nanoemulsion 2.csv'
-    if not os.path.exists(csv_file):
-        st.error(f"Please upload '{csv_file}' to your GitHub repo.")
+    if not os.path.exists("nanoemulsion 2.csv"):
+        st.error("❌ nanoemulsion 2.csv missing")
         st.stop()
-    
-    df = pd.read_csv(csv_file)
-    def get_num(x):
+
+    df = pd.read_csv("nanoemulsion 2.csv")
+
+    def num(x):
         if pd.isna(x): return np.nan
-        val = re.findall(r"[-+]?\d*\.\d+|\d+", str(x))
-        return float(val[0]) if val else np.nan
+        m = re.findall(r"[-+]?\d*\.\d+|\d+", str(x))
+        return float(m[0]) if m else np.nan
 
-    targets = ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']
-    for col in targets:
-        df[f'{col}_clean'] = df[col].apply(get_num)
-        
-    df_train = df.dropna(subset=[f'{col}_clean' for col in targets]).copy()
-    
-    q1, q3 = df_train['Encapsulation_Efficiency_clean'].quantile([0.25, 0.75])
-    iqr = q3 - q1
-    df_train['is_outlier'] = (df_train['Encapsulation_Efficiency_clean'] < (q1 - 1.5 * iqr)) | \
-                             (df_train['Encapsulation_Efficiency_clean'] > (q3 + 1.5 * iqr))
+    targets = ['Size_nm','PDI','Zeta_mV','Drug_Loading','Encapsulation_Efficiency']
+    for t in targets:
+        df[f"{t}_c"] = df[t].apply(num)
 
-    for col in ['Drug_Name', 'Surfactant', 'Co-surfactant', 'Oil_phase']:
-        df_train[col] = df_train[col].fillna("Not Specified").astype(str)
+    df = df.dropna(subset=[f"{t}_c" for t in targets])
+    for c in ['Drug_Name','Oil_phase','Surfactant','Co-surfactant']:
+        df[c] = df[c].fillna("Unknown")
 
-    le_dict = {}
-    for col in ['Drug_Name', 'Surfactant', 'Co-surfactant', 'Oil_phase']:
+    enc = {}
+    for c in ['Drug_Name','Oil_phase','Surfactant','Co-surfactant']:
         le = LabelEncoder()
-        df_train[f'{col}_enc'] = le.fit_transform(df_train[col])
-        le_dict[col] = le
-        
-    X = df_train[['Drug_Name_enc', 'Oil_phase_enc', 'Surfactant_enc', 'Co-surfactant_enc']]
-    models = {col: GradientBoostingRegressor(n_estimators=300, random_state=42).fit(X, df_train[f'{col}_clean']) for col in targets}
-    
-    df_train['is_stable'] = df_train['Stability'].str.lower().str.contains('stable').fillna(False).astype(int)
-    stab_model = RandomForestClassifier(n_estimators=300, random_state=42).fit(X, df_train['is_stable'])
-    
-    return df_train, models, stab_model, le_dict
+        df[c+"_e"] = le.fit_transform(df[c])
+        enc[c] = le
 
-df, models, stab_model, le_dict = load_and_prep()
+    X = df[['Drug_Name_e','Oil_phase_e','Surfactant_e','Co-surfactant_e']]
+    models = {t: GradientBoostingRegressor(n_estimators=300, random_state=42)
+              .fit(X, df[f"{t}_c"]) for t in targets}
 
-# --- 2. STRUCTURE PREDICTION ---
+    stab = (df['Stability'].str.lower().str.contains('stable')).astype(int)
+    stab_model = RandomForestClassifier(n_estimators=300, random_state=42).fit(X, stab)
+
+    return df, models, stab_model, enc
+
+df, models, stab_model, enc = load_and_prep()
+
+# -------------------- STRUCTURE --------------------
 @st.cache_data
-def get_structure(drug_name):
-    if not HAS_CHEM_LIBS: return None, None, None, None
+def mol_img(name):
+    if not HAS_CHEM_LIBS: return None
     try:
-        comp = pcp.get_compounds(drug_name, 'name')[0]
-        mol = Chem.MolFromSmiles(comp.canonical_smiles)
-        return Draw.MolToImage(mol, size=(300, 300)), comp.canonical_smiles, comp.molecular_weight, comp.xlogp
-    except: return None, None, None, None
+        c = pcp.get_compounds(name,'name')[0]
+        m = Chem.MolFromSmiles(c.canonical_smiles)
+        return Draw.MolToImage(m, size=(280,280))
+    except: return None
 
-# --- 3. UI STATE & SIDEBAR ---
-if 'setup_complete' not in st.session_state:
-    st.session_state.setup_complete = False
+# -------------------- PREMIUM ANIMATION --------------------
+def nano_animation(size, pdi, zeta, drug, oil):
+    breakup = min(0.12 + pdi/4, 0.28)
+    radius = max(5, min(size/6, 24))
 
+    return f"""
+<canvas id="nano"></canvas>
+<script>
+const c=document.getElementById("nano"),x=c.getContext("2d");
+c.width=620;c.height=340;let d=[];
+class P{{
+constructor(r){{this.x=c.width/2;this.y=c.height/2;
+this.r=r;this.dx=(Math.random()-.5)*1.6;this.dy=(Math.random()-.5)*1.6}}
+m(){{this.x+=this.dx;this.y+=this.dy;
+if(this.x<0||this.x>c.width)this.dx*=-1;
+if(this.y<0||this.y>c.height)this.dy*=-1}}
+b(){{if(this.r>{radius}&&Math.random()< {breakup}){{
+d.push(new P(this.r*.65),new P(this.r*.65));this.r*=.55}}}
+dr(){{x.beginPath();x.arc(this.x,this.y,this.r,0,7);
+x.fillStyle="rgba(0,216,214,0.7)";
+x.shadowBlur=10;x.shadowColor="#00d8d6";x.fill();}}
+}}
+function i(){{d=[];for(let i=0;i<6;i++)d.push(new P({radius*2}))}}
+function a(){{x.fillStyle="rgba(15,32,39,.35)";
+x.fillRect(0,0,c.width,c.height);
+d.forEach(p=>{{p.m();p.b();p.dr();}});
+requestAnimationFrame(a)}}
+i();a();
+</script>
+<div style="text-align:center;color:#00d8d6;font-size:12px">
+{drug} | {oil} | Size {size:.1f} nm | PDI {pdi:.2f} | Zeta {zeta:.1f} mV
+</div>
+"""
+
+# -------------------- SIDEBAR --------------------
 st.sidebar.title("NanoPredict Controls")
-nav_choice = st.sidebar.radio("Go to:", ["Step 1: Chemical Setup", "Step 2: Expert Rationale", "Step 3: Prediction & Nanomodel"])
+page = st.sidebar.radio("Navigate",["Step 1: Chemical Setup",
+                                   "Step 2: Expert Rationale",
+                                   "Step 3: Prediction & Nanomodel"])
 
-# --- PAGE 1: SETUP ---
-if nav_choice == "Step 1: Chemical Setup":
-    st.header("Step 1: API & Lipid Selection")
-    c1, c2 = st.columns(2)
+if "ok" not in st.session_state:
+    st.session_state.ok = False
+
+# -------------------- STEP 1 --------------------
+if page=="Step 1: Chemical Setup":
+    st.header("🧪 Chemical & Lipid Setup")
+    c1,c2 = st.columns(2)
     with c1:
-        selected_drug = st.selectbox("Select API", sorted(df['Drug_Name'].unique()), key="drug_select")
-        selected_oil = st.selectbox("Select Oil Phase", sorted(df['Oil_phase'].unique()), key="oil_select")
-        if st.button("✅ Confirm & Unlock System"):
-            st.session_state.setup_complete = True
-            st.session_state.current_drug = selected_drug
-            st.session_state.current_oil = selected_oil
-            st.success("System Unlocked!")
+        drug = st.selectbox("API", sorted(df['Drug_Name'].unique()))
+        oil = st.selectbox("Oil Phase", sorted(df['Oil_phase'].unique()))
+        if st.button("Unlock System"):
+            st.session_state.ok=True
+            st.session_state.drug=drug
+            st.session_state.oil=oil
+            st.success("Unlocked")
     with c2:
-        img, smi, mw, lp = get_structure(selected_drug)
-        if img: st.image(img, caption=f"2D Molecule: {selected_drug}")
+        img = mol_img(drug)
+        if img: st.image(img, caption=f"{drug} structure")
 
-# --- PAGE 2: RATIONALE ---
-elif nav_choice == "Step 2: Expert Rationale":
-    if not st.session_state.setup_complete:
-        st.markdown("<div class='locked-msg'>🔒 Locked: Please complete Step 1.</div>", unsafe_allow_html=True)
+# -------------------- STEP 2 --------------------
+elif page=="Step 2: Expert Rationale":
+    if not st.session_state.ok:
+        st.markdown("<div class='locked-msg'>Locked</div>",unsafe_allow_html=True)
     else:
-        st.header("Step 2: Scientific Rationale")
-        oil = st.session_state.current_oil
-        best = df[df['Oil_phase'] == oil].sort_values(by='Encapsulation_Efficiency_clean', ascending=False).iloc[0]
-        st.info(f"Recommended System: {best['Surfactant']} + {best['Co-surfactant']}")
-        st.write(f"This system achieved {best['Encapsulation_Efficiency_clean']:.1f}% efficiency in historical trials.")
+        st.header("🔬 Scientific Rationale")
+        best = df[df['Oil_phase']==st.session_state.oil]\
+               .sort_values("Encapsulation_Efficiency_c",ascending=False).iloc[0]
+        st.info(f"Optimal surfactant system: **{best['Surfactant']} + {best['Co-surfactant']}**")
+        st.write(f"Reported EE ≈ **{best['Encapsulation_Efficiency_c']:.1f}%**")
 
-# --- PAGE 3: PREDICTION & MODELING ---
-elif nav_choice == "Step 3: Prediction & Nanomodel":
-    if not st.session_state.setup_complete:
-        st.markdown("<div class='locked-msg'>🔒 Locked: Please complete Step 1.</div>", unsafe_allow_html=True)
+# -------------------- STEP 3 --------------------
+elif page=="Step 3: Prediction & Nanomodel":
+    if not st.session_state.ok:
+        st.markdown("<div class='locked-msg'>Locked</div>",unsafe_allow_html=True)
     else:
-        st.header("Step 3: Outcome & Structural Nanomodel")
-        c1, c2 = st.columns([1, 1.2])
-        
+        st.header("🚀 Prediction & Nanoemulsion Formation")
+        c1,c2 = st.columns([1,1.25])
+
         with c1:
-            s_choice = st.selectbox("Surfactant", sorted(df['Surfactant'].unique()))
-            cs_choice = st.selectbox("Co-Surfactant", sorted(df['Co-surfactant'].unique()))
-            
-            if st.button("🚀 Execute Simulation"):
-                # Prediction logic
-                inputs = [[le_dict['Drug_Name'].transform([st.session_state.current_drug])[0],
-                           le_dict['Oil_phase'].transform([st.session_state.current_oil])[0],
-                           le_dict['Surfactant'].transform([s_choice])[0],
-                           le_dict['Co-surfactant'].transform([cs_choice])[0]]]
-                
-                res = [models[col].predict(inputs)[0] for col in ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']]
-                
-                # RESULTS DISPLAY
-                st.subheader("Predicted Outcomes")
-                metrics = [("Size", f"{res[0]:.1f} nm"), ("Loading", f"{res[3]:.2f} mg/mL"), ("EE %", f"{res[4]:.1f}%")]
-                for l, v in metrics:
-                    st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
+            s = st.selectbox("Surfactant", sorted(df['Surfactant'].unique()))
+            cs = st.selectbox("Co-surfactant", sorted(df['Co-surfactant'].unique()))
+            if st.button("Execute Simulation"):
+                X = [[enc['Drug_Name'].transform([st.session_state.drug])[0],
+                      enc['Oil_phase'].transform([st.session_state.oil])[0],
+                      enc['Surfactant'].transform([s])[0],
+                      enc['Co-surfactant'].transform([cs])[0]]]
+                res = [models[t].predict(X)[0] for t in
+                       ['Size_nm','PDI','Zeta_mV','Drug_Loading','Encapsulation_Efficiency']]
+
+                for lab,val in zip(
+                    ["Size (nm)","Loading","EE %"],
+                    [f"{res[0]:.1f}",f"{res[3]:.2f}",f"{res[4]:.1f}"]):
+                    st.markdown(
+                        f"<div class='metric-card'><div class='m-label'>{lab}</div>"
+                        f"<div class='m-value'>{val}</div></div>",
+                        unsafe_allow_html=True)
 
         with c2:
-            st.subheader("AI Nanomodel Visualization")
             if 'res' in locals():
-                # STRUCTURAL MODEL DESCRIPTION
-                st.markdown(f"""
-                <div class="model-box">
-                <h4>Droplet Architecture (Predicted)</h4>
-                <hr>
-                <ul>
-                    <li><b>Core:</b> Lipophilic core containing <b>{st.session_state.current_oil}</b> and solubilized <b>{st.session_state.current_drug}</b>.</li>
-                    <li><b>Interfacial Layer:</b> A high-density film of <b>{s_choice}</b> and <b>{cs_choice}</b> molecules.</li>
-                    <li><b>Self-Assembly:</b> The surfactant tails are anchored in the oil core, while polar heads face the water.</li>
-                    <li><b>Stability Mechanism:</b> Electrostatic repulsion (Zeta: {res[2]:.1f} mV) preventing coalescence.</li>
-                    <li><b>Droplet Geometry:</b> Spherical micelle with an average radius of {res[0]/2:.1f} nm.</li>
-                </ul>
-                <p style="font-size: 12px; color: #00d8d6;">*Simulation based on Brownian motion and interfacial tension parameters.</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Simple Visual representation using Plotly
-                fig = go.Figure(data=[go.Scatter(
-                    x=[0], y=[0], mode='markers',
-                    marker=dict(size=res[0], color='rgba(0, 216, 214, 0.6)', line=dict(width=4, color='white'))
-                )])
-                fig.update_layout(title="Droplet Cross-Section (Scale: nm)", showlegend=False, 
-                                  xaxis=dict(visible=False), yaxis=dict(visible=False), height=300)
-                st.plotly_chart(fig, use_container_width=True)
+                html(
+                    nano_animation(res[0],res[1],res[2],
+                                   st.session_state.drug,
+                                   st.session_state.oil),
+                    height=420
+                )
