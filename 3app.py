@@ -188,7 +188,7 @@ elif page=="Step 3: Prediction & Nanomodel":
 
         with c2:
             if 'res' in locals():
-                html def nano_animation(size, pdi, zeta, drug, oil):
+                def nano_animation(size, pdi, zeta, drug, oil):
     breakup = min(0.12 + pdi/4, 0.28)
     radius = max(5, min(size/6, 24))
 
