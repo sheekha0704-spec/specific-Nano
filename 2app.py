@@ -38,7 +38,12 @@ st.markdown("""
 # --- 1. THE BRAIN: DATA & ML ENGINE ---
 @st.cache_data
 def load_and_train_precision():
-    df = pd.read_csv('nanoemulsion 2.csv')
+    # Attempt to load the user's specific file
+    try:
+        df = pd.read_csv('nanoemulsion 2.csv')
+    except:
+        st.error("Error: 'nanoemulsion 2.csv' not found. Please upload to GitHub.")
+        st.stop()
     
     def get_num(x):
         if pd.isna(x): return np.nan
@@ -48,6 +53,7 @@ def load_and_train_precision():
     targets = ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']
     for col in targets:
         df[f'{col}_clean'] = df[col].apply(get_num)
+        # Accurate imputation based on Oil_phase group
         df[f'{col}_clean'] = df.groupby('Oil_phase')[f'{col}_clean'].transform(lambda x: x.fillna(x.median()))
 
     le_dict = {}
@@ -117,32 +123,36 @@ elif page == "2. Data-Driven Rationale":
     st.header("Step 2: Evidence-Based Recommendation")
     oil = st.session_state.inputs['oil']
     
-    # Specific Search: Find the highest efficiency system for this specific Oil in your 900+ rows
-    top_form = df[df['Oil_phase'] == oil].sort_values(by='EE_clean', ascending=False).iloc[0]
+    # Specific Search: Find historical outcomes for this specific Oil
+    oil_stats = df[df['Oil_phase'] == oil].sort_values(by='EE_clean', ascending=False)
     
-    st.markdown(f"### Optimal Surfactant System for **{oil}**")
-    st.markdown(f"""
-    <div class="rationale-box">
-    <b>AI Analysis of your 900+ Data Points:</b><br>
-    For the oil <b>{oil}</b>, the most specific recommendation is the <b>{top_form['Surfactant']} + {top_form['Co-surfactant']}</b> system. 
-    <br><br>
-    <b>Why?</b> This choice is based on historical outcomes in your research where this pair achieved an 
-    average droplet size of <b>{top_form['Size_nm_clean']:.2f} nm</b> and an encapsulation efficiency of <b>{top_form['EE_clean']:.2f}%</b>. 
-    This system provides the highest lipophilic affinity for {st.session_state.inputs['drug']}.
-    </div>
-    """, unsafe_allow_html=True)
+    if not oil_stats.empty:
+        top_form = oil_stats.iloc[0]
+        st.markdown(f"### Optimal Surfactant System for **{oil}**")
+        st.markdown(f"""
+        <div class="rationale-box">
+        <b>AI Analysis of your 900+ Data Points:</b><br>
+        For the oil <b>{oil}</b>, the most specific recommendation is the <b>{top_form['Surfactant']} + {top_form['Co-surfactant']}</b> system. 
+        <br><br>
+        <b>Why?</b> This choice is based on historical outcomes in your research where this pair achieved an 
+        average droplet size of <b>{top_form['Size_nm_clean']:.2f} nm</b> and an encapsulation efficiency of <b>{top_form['EE_clean']:.2f}%</b>. 
+        This system provides the highest lipophilic affinity for {st.session_state.inputs['drug']}.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("No historical data found for this specific oil phase.")
 
 # --- STEP 3: PREDICTION ---
 elif page == "3. Precision Prediction":
     st.header("Step 3: Multi-Output Results & Ternary Analysis")
     
-    # REQUEST 2: AXIS GUIDE
+    # REQUEST: AXIS GUIDE
     st.markdown(f"""
     <div class="axis-legend-box">
     <b>🧬 Guide to the 3D Pseudo-Ternary Phase Diagram:</b><br>
-    • <b>X-Axis (Oil Phase %):</b> The concentration of the lipophilic lipid carrier.<br>
+    • <b>X-Axis (Oil Phase %):</b> The concentration of the lipid carrier.<br>
     • <b>Y-Axis (S-mix %):</b> The combined concentration of Surfactant and Co-surfactant blend.<br>
-    • <b>Z-Axis (Aqueous Phase %):</b> The volume of distilled water or buffer solution.
+    • <b>Z-Axis (Aqueous Phase %):</b> The volume of the aqueous phase (Water/Buffer).
     </div>
     """, unsafe_allow_html=True)
     
@@ -153,16 +163,18 @@ elif page == "3. Precision Prediction":
         cs_choice = st.selectbox("Select Co-Surfactant", sorted(df['Co-surfactant'].unique()))
         
         if st.button("🚀 Run AI Engine"):
-            d_e = le_dict['Drug_Name'].transform([st.session_state.inputs['drug']])[0]
-            o_e = le_dict['Oil_phase'].transform([st.session_state.inputs['oil']])[0]
-            s_e = le_dict['Surfactant'].transform([s_choice])[0]
-            c_e = le_dict['Co-surfactant'].transform([cs_choice])[0]
+            # Encodings
+            d_idx = le_dict['Drug_Name'].transform([st.session_state.inputs['drug']])[0]
+            o_idx = le_dict['Oil_phase'].transform([st.session_state.inputs['oil']])[0]
+            s_idx = le_dict['Surfactant'].transform([s_choice])[0]
+            c_idx = le_dict['Co-surfactant'].transform([cs_choice])[0]
             
             # Predict
-            res = [models[col].predict([[d_e, o_e, s_e, c_e]])[0] for col in ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']]
-            stab = stab_model.predict_proba([[d_e, o_e, s_e, c_e]])[0][1] * 100
+            in_vec = [[d_idx, o_idx, s_idx, c_idx]]
+            res = [models[col].predict(in_vec)[0] for col in targets]
+            stab = stab_model.predict_proba(in_vec)[0][1] * 100
             
-            # REQUEST 1: FULL VALUE PRINTING (HTML Cards)
+            # DISPLAY (HTML Cards for full font/unit printing)
             outputs = [
                 ("Droplet Size", f"{res[0]:.2f} nm"), ("PDI", f"{res[1]:.3f}"),
                 ("Zeta Potential", f"{res[2]:.2f} mV"), ("Drug Loading", f"{res[3]:.2f} mg/mL"),
@@ -173,7 +185,7 @@ elif page == "3. Precision Prediction":
                 st.markdown(f"<div class='metric-card'><div class='m-label'>{label}</div><div class='m-value'>{val}</div></div>", unsafe_allow_html=True)
 
     with c2:
-        # 3D Diagram
+        # Ternary Logic
         oil_v = np.linspace(5, 40, 15)
         smix_v = np.linspace(15, 65, 15)
         O, S = np.meshgrid(oil_v, smix_v)
@@ -182,8 +194,8 @@ elif page == "3. Precision Prediction":
         
         fig = go.Figure(data=[go.Scatter3d(
             x=O[mask], y=S[mask], z=W[mask],
-            mode='markers', marker=dict(size=5, color=S[mask], colorscale='Jet', colorbar=dict(title="S-mix %"))
+            mode='markers', marker=dict(size=5, color=S[mask], colorscale='Viridis', colorbar=dict(title="S-mix %"))
         )])
         fig.update_layout(scene=dict(xaxis_title='Oil % (X)', yaxis_title='S-mix % (Y)', zaxis_title='Water % (Z)'),
-                          margin=dict(l=0,r=0,b=0,t=0), height=500)
+                          margin=dict(l=0,r=0,b=0,t=0), height=550)
         st.plotly_chart(fig, use_container_width=True)
