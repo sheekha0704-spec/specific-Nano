@@ -3,7 +3,6 @@ pandas
 numpy
 plotly
 scikit-learn
-rdkit
 pubchempy
 beautifulsoup4
 requests
