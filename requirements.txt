@@ -6,4 +6,4 @@ scikit-learn
 pubchempy
 beautifulsoup4
 requests
-rdkit-pypi
+rdkit
