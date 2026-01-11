@@ -8,3 +8,4 @@ beautifulsoup4
 requests
 rdkit
 biopython
+fpdf2
