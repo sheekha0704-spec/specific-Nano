@@ -94,7 +94,7 @@ def nano_animation(size, pdi, zeta, drug, oil):
     breakup = min(0.12 + pdi / 4, 0.28)
     radius = max(5, min(size / 6, 24))
 
-    template = """
+    template = Template("""
 <canvas id="nano"></canvas>
 <script>
 const c = document.getElementById("nano");
@@ -121,7 +121,7 @@ class P {
   }
 
   breakup() {
-    if (this.r > {radius} && Math.random() < {breakup}) {
+    if (this.r > $radius && Math.random() < $breakup) {
       d.push(new P(this.r * 0.65), new P(this.r * 0.65));
       this.r *= 0.55;
     }
@@ -140,7 +140,7 @@ class P {
 function init() {
   d = [];
   for (let i = 0; i < 6; i++) {
-    d.push(new P({init_radius}));
+    d.push(new P($init_radius));
   }
 }
 
@@ -160,11 +160,11 @@ animate();
 </script>
 
 <div style="text-align:center;color:#00d8d6;font-size:12px;">
-{drug} | {oil} | Size {size} nm | PDI {pdi} | Zeta {zeta} mV
+$drug | $oil | Size $size nm | PDI $pdi | Zeta $zeta mV
 </div>
-"""
+""")
 
-    return template.format(
+    return template.substitute(
         radius=radius,
         breakup=breakup,
         init_radius=radius * 2,
@@ -174,6 +174,7 @@ animate();
         pdi=f"{pdi:.2f}",
         zeta=f"{zeta:.1f}"
     )
+
 
 
 # -------------------- SIDEBAR --------------------
