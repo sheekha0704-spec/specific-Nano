@@ -199,11 +199,13 @@ elif st.session_state.step_val == "Step 4: Selection":
         """, unsafe_allow_html=True)
 
 # --- STEP 5: RESULTS ---
+# --- STEP 5: RESULTS ---
 elif st.session_state.step_val == "Step 5: Results":
     st.header("Step 5: Performance Results")
-    if st.session_state.s_final is None: st.error("Please complete Step 4.")
+    if st.session_state.s_final is None: 
+        st.error("Please complete Step 4.")
     else:
-        # Prediction
+        # 1. Prediction Logic
         inputs = [[le_dict['Drug_Name'].transform([st.session_state.drug])[0],
                    le_dict['Oil_phase'].transform([st.session_state.oil])[0],
                    le_dict['Surfactant'].transform([st.session_state.s_final])[0],
@@ -211,36 +213,53 @@ elif st.session_state.step_val == "Step 5: Results":
         
         res = [models[col].predict(inputs)[0] for col in ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']]
         
-        # Save to History
+        # 2. Save to History
         if not any(h['s'] == st.session_state.s_final and h['cs'] == st.session_state.cs_final for h in st.session_state.history):
             st.session_state.history.append({'drug': st.session_state.drug, 'size': round(res[0],1), 's': st.session_state.s_final, 'cs': st.session_state.cs_final})
 
-        # Metrics
+        # 3. Display Metrics
         cols = st.columns(3)
         m_list = [("Size", f"{res[0]:.1f} nm"), ("PDI", f"{res[1]:.3f}"), ("Zeta", f"{res[2]:.1f} mV"),
-                  ("Loading", f"{res[3]:.2f} mg/mL"), ("EE %", f"{res[4]:.1f} %"), ("Stability", "95.4%")]
+                  ("Loading", f"{res[3]:.2f} mg/mL"), ("EE %", f"{res[4]:.1f} %"), ("Stability", "High")]
         for i, (l, v) in enumerate(m_list):
-            with cols[i % 3]: st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
+            with cols[i % 3]: 
+                st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
 
-        # Plots
+        # 4. Visualization Rows
         c1, c2 = st.columns(2)
+        
         with c1:
-            st.subheader("PDI Distribution")
-            fig_pdi = px.scatter(x=[res[0]], y=[res[1]], labels={'x':'Size (nm)', 'y':'PDI'}, title="PDI Quality")
-            fig_pdi.add_hline(y=0.3, line_dash="dash", line_color="green", annotation_text="Stable Range")
-            st.plotly_chart(fig_pdi, use_container_width=True)
+            st.subheader("PDI Distribution Curve")
+            # Generate a Gaussian curve to simulate the PDI distribution for the user
+            mu = res[0] # Mean Size
+            sigma = res[0] * res[1] # Standard deviation based on PDI
+            x = np.linspace(mu - 4*sigma, mu + 4*sigma, 100)
+            y = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sigma)**2)
+            
+            fig_dist = px.line(x=x, y=y, labels={'x': 'Size (nm)', 'y': 'Relative Intensity'}, title="Estimated Particle Size Distribution")
+            fig_dist.add_vline(x=mu, line_dash="dash", line_color="red", annotation_text=f"Mean: {mu:.1f}nm")
+            st.plotly_chart(fig_dist, use_container_width=True)
+
         with c2:
             st.subheader("Ternary Phase Mapping")
-            
-
-[Image, of a ternary phase diagram for nanoemulsion]
-
+            # Fixed Ternary Plot logic
             fig_tern = go.Figure(go.Scatterternary({
                 'mode': 'markers',
-                'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [st.session_state.water_p],
-                'marker': {'color': 'red', 'size': 14, 'symbol': 'diamond'}
+                'a': [st.session_state.oil_p], 
+                'b': [st.session_state.smix_p], 
+                'c': [st.session_state.water_p],
+                'marker': {'color': '#3498db', 'size': 14, 'symbol': 'diamond', 'line': {'width': 2, 'color': 'black'}}
             }))
-            fig_tern.update_layout({'ternary': {'sum': 100, 'aaxis': {'title': 'Oil'}, 'baxis': {'title': 'Smix'}, 'caxis': {'title': 'Water'}}, 'height': 450})
+            fig_tern.update_layout({
+                'ternary': {
+                    'sum': 100, 
+                    'aaxis': {'title': 'Oil %'}, 
+                    'baxis': {'title': 'Smix %'}, 
+                    'caxis': {'title': 'Water %'}
+                }, 
+                'height': 450,
+                'margin': dict(l=0, r=0, b=0, t=30)
+            })
             st.plotly_chart(fig_tern, use_container_width=True)
 
     if st.button("🔄 Start New Calculation"):
