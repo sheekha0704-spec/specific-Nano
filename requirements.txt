@@ -7,3 +7,4 @@ rdkit
 pubchempy
 beautifulsoup4
 requests
+rdkit-pypi
