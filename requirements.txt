@@ -7,3 +7,4 @@ pubchempy
 beautifulsoup4
 requests
 rdkit
+biopython
