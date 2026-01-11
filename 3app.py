@@ -91,37 +91,90 @@ def mol_img(name):
 
 # -------------------- PREMIUM ANIMATION --------------------
 def nano_animation(size, pdi, zeta, drug, oil):
-    breakup = min(0.12 + pdi/4, 0.28)
-    radius = max(5, min(size/6, 24))
+    breakup = min(0.12 + pdi / 4, 0.28)
+    radius = max(5, min(size / 6, 24))
 
-    return f"""
+    template = """
 <canvas id="nano"></canvas>
 <script>
-const c=document.getElementById("nano"),x=c.getContext("2d");
-c.width=620;c.height=340;let d=[];
-class P{{
-constructor(r){{this.x=c.width/2;this.y=c.height/2;
-this.r=r;this.dx=(Math.random()-.5)*1.6;this.dy=(Math.random()-.5)*1.6}}
-m(){{this.x+=this.dx;this.y+=this.dy;
-if(this.x<0||this.x>c.width)this.dx*=-1;
-if(this.y<0||this.y>c.height)this.dy*=-1}}
-b(){{if(this.r>{radius}&&Math.random()< {breakup}){{
-d.push(new P(this.r*.65),new P(this.r*.65));this.r*=.55}}}
-dr(){{x.beginPath();x.arc(this.x,this.y,this.r,0,7);
-x.fillStyle="rgba(0,216,214,0.7)";
-x.shadowBlur=10;x.shadowColor="#00d8d6";x.fill();}}
-}}
-function i(){{d=[];for(let i=0;i<6;i++)d.push(new P({radius*2}))}}
-function a(){{x.fillStyle="rgba(15,32,39,.35)";
-x.fillRect(0,0,c.width,c.height);
-d.forEach(p=>{{p.m();p.b();p.dr();}});
-requestAnimationFrame(a)}}
-i();a();
+const c = document.getElementById("nano");
+const x = c.getContext("2d");
+c.width = 620;
+c.height = 340;
+
+let d = [];
+
+class P {
+  constructor(r) {
+    this.x = c.width / 2;
+    this.y = c.height / 2;
+    this.r = r;
+    this.dx = (Math.random() - 0.5) * 1.6;
+    this.dy = (Math.random() - 0.5) * 1.6;
+  }
+
+  move() {
+    this.x += this.dx;
+    this.y += this.dy;
+    if (this.x < 0 || this.x > c.width) this.dx *= -1;
+    if (this.y < 0 || this.y > c.height) this.dy *= -1;
+  }
+
+  breakup() {
+    if (this.r > {radius} && Math.random() < {breakup}) {
+      d.push(new P(this.r * 0.65), new P(this.r * 0.65));
+      this.r *= 0.55;
+    }
+  }
+
+  draw() {
+    x.beginPath();
+    x.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    x.fillStyle = "rgba(0,216,214,0.7)";
+    x.shadowBlur = 10;
+    x.shadowColor = "#00d8d6";
+    x.fill();
+  }
+}
+
+function init() {
+  d = [];
+  for (let i = 0; i < 6; i++) {
+    d.push(new P({init_radius}));
+  }
+}
+
+function animate() {
+  x.fillStyle = "rgba(15,32,39,0.35)";
+  x.fillRect(0, 0, c.width, c.height);
+  d.forEach(p => {
+    p.move();
+    p.breakup();
+    p.draw();
+  });
+  requestAnimationFrame(animate);
+}
+
+init();
+animate();
 </script>
-<div style="text-align:center;color:#00d8d6;font-size:12px">
-{drug} | {oil} | Size {size:.1f} nm | PDI {pdi:.2f} | Zeta {zeta:.1f} mV
+
+<div style="text-align:center;color:#00d8d6;font-size:12px;">
+{drug} | {oil} | Size {size} nm | PDI {pdi} | Zeta {zeta} mV
 </div>
 """
+
+    return template.format(
+        radius=radius,
+        breakup=breakup,
+        init_radius=radius * 2,
+        drug=drug,
+        oil=oil,
+        size=f"{size:.1f}",
+        pdi=f"{pdi:.2f}",
+        zeta=f"{zeta:.1f}"
+    )
+
 
 # -------------------- SIDEBAR --------------------
 st.sidebar.title("NanoPredict Controls")
@@ -188,76 +241,9 @@ elif page=="Step 3: Prediction & Nanomodel":
 
         with c2:
             if 'res' in locals():
-                def nano_animation(size, pdi, zeta, drug, oil):
-    breakup = min(0.12 + pdi/4, 0.28)
-    radius = max(5, min(size/6, 24))
-
-    return f"""
-<canvas id="nano"></canvas>
-<script>
-const c = document.getElementById("nano");
-const x = c.getContext("2d");
-c.width = 620;
-c.height = 340;
-
-let d = [];
-
-class P {{
-  constructor(r) {{
-    this.x = c.width / 2;
-    this.y = c.height / 2;
-    this.r = r;
-    this.dx = (Math.random() - 0.5) * 1.6;
-    this.dy = (Math.random() - 0.5) * 1.6;
-  }}
-
-  move() {{
-    this.x += this.dx;
-    this.y += this.dy;
-    if (this.x < 0 || this.x > c.width) this.dx *= -1;
-    if (this.y < 0 || this.y > c.height) this.dy *= -1;
-  }}
-
-  breakup() {{
-    if (this.r > {radius} && Math.random() < {breakup}) {{
-      d.push(new P(this.r * 0.65), new P(this.r * 0.65));
-      this.r *= 0.55;
-    }}
-  }}
-
-  draw() {{
-    x.beginPath();
-    x.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-    x.fillStyle = "rgba(0,216,214,0.7)";
-    x.shadowBlur = 10;
-    x.shadowColor = "#00d8d6";
-    x.fill();
-  }}
-}}
-
-function init() {{
-  d = [];
-  for (let i = 0; i < 6; i++) {{
-    d.push(new P({radius * 2}));
-  }}
-}}
-
-function animate() {{
-  x.fillStyle = "rgba(15,32,39,0.35)";
-  x.fillRect(0, 0, c.width, c.height);
-  d.forEach(p => {{
-    p.move();
-    p.breakup();
-    p.draw();
-  }});
-  requestAnimationFrame(animate);
-}}
-
-init();
-animate();
-</script>
-
-<div style="text-align:center;color:#00d8d6;font-size:12px;">
-{drug} | {oil} | Size {size:.1f} nm | PDI {pdi:.2f} | Zeta {zeta:.1f} mV
-</div>
-"""
+                html(
+                    nano_animation(res[0],res[1],res[2],
+                                   st.session_state.drug,
+                                   st.session_state.oil),
+                    height=420
+                )
