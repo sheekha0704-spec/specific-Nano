@@ -1,5 +1,17 @@
 import streamlit as st
 import pandas as pd
+import os
+
+# --- 1. SAFETY CHECK FOR FILE ---
+csv_filename = 'nanoemulsion 2.csv'
+
+if not os.path.exists(csv_filename):
+    st.error(f"❌ File Not Found: Please ensure '{csv_filename}' is uploaded to your GitHub repository.")
+    st.info("If you renamed the file, please update the code line: csv_filename = 'your_new_name.csv'")
+    st.stop() # Stops the app from crashing with a red error block
+
+# --- 2. REST OF THE MODEL ---
+# (The rest of the High-Precision code from our previous turn goes here)
 import numpy as np
 import plotly.graph_objects as go
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier
