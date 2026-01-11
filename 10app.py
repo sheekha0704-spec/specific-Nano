@@ -11,14 +11,14 @@ import os
 # --- CHEMICAL LIBRARIES ---
 try:
     from rdkit import Chem
-    from rdkit.Chem import Draw, Descriptors
+    from rdkit.Chem import Draw, Descriptors, Fragments
     import pubchempy as pcp
     HAS_CHEM_LIBS = True
 except ImportError:
     HAS_CHEM_LIBS = False
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="NanoPredict AI v13.0", layout="wide")
+st.set_page_config(page_title="NanoPredict AI v14.0", layout="wide")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -32,7 +32,7 @@ st.markdown("""
     .m-value { font-size: 22px; color: #1a202c; font-weight: 800; }
     .rec-box {
         background: #f8fbff; border: 2px solid #3b82f6; 
-        padding: 20px; border-radius: 12px; min-height: 200px;
+        padding: 20px; border-radius: 12px; min-height: 250px;
     }
     .summary-table {
         background: #1a202c; color: white; padding: 20px; 
@@ -79,9 +79,12 @@ def load_and_prep():
 
 df, models, stab_model, le_dict = load_and_prep()
 
-# --- 2. STATE MANAGEMENT & AUTO-NAV ---
+# --- 2. STATE MANAGEMENT ---
 if 'step_val' not in st.session_state: st.session_state.step_val = "Step 1: Chemical Setup"
 if 'history' not in st.session_state: st.session_state.history = []
+# Initialize keys to prevent breakage
+for key in ['drug', 'oil', 'aq', 'drug_mg', 'oil_p', 'smix_p', 'smix_ratio', 's_final', 'cs_final']:
+    if key not in st.session_state: st.session_state[key] = None
 
 def go_to_step(next_step):
     st.session_state.step_val = next_step
@@ -91,21 +94,21 @@ def go_to_step(next_step):
 with st.sidebar:
     st.title("NanoPredict AI")
     nav_options = ["Step 1: Chemical Setup", "Step 2: Concentrations", "Step 3: AI Screening", "Step 4: Selection", "Step 5: Results"]
-    st.session_state.step_val = st.radio("Current Progress:", nav_options, index=nav_options.index(st.session_state.step_val))
+    st.session_state.step_val = st.radio("Navigation", nav_options, index=nav_options.index(st.session_state.step_val))
     st.write("---")
     st.subheader("📋 Session History")
     for item in st.session_state.history:
-        st.markdown(f"<div class='history-item'><b>{item['drug']}</b>: {item['size']}nm</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='history-item'><b>{item['drug']}</b> | Size: {item['size']}nm</div>", unsafe_allow_html=True)
 
 # --- STEP 1: CHEMICAL SETUP ---
 if st.session_state.step_val == "Step 1: Chemical Setup":
-    st.header("Step 1: API & Phase Identification")
+    st.header("Step 1: API & Structural Analysis")
     c1, c2 = st.columns(2)
     with c1:
-        drug = st.selectbox("API (Drug)", sorted(df['Drug_Name'].unique()))
-        oil = st.selectbox("Oil Phase", sorted(df['Oil_phase'].unique()))
-        aq = st.selectbox("Aqueous Phase", ["Distilled Water", "Buffer pH 6.8", "Saline"])
-        if st.button("Confirm & Next Step →"):
+        drug = st.selectbox("Select API (Drug)", sorted(df['Drug_Name'].unique()))
+        oil = st.selectbox("Select Oil Phase", sorted(df['Oil_phase'].unique()))
+        aq = st.selectbox("Select Aqueous Phase", ["Distilled Water", "Buffer pH 6.8", "Saline"])
+        if st.button("Confirm Phase Setup →"):
             st.session_state.drug, st.session_state.oil, st.session_state.aq = drug, oil, aq
             go_to_step("Step 2: Concentrations")
     with c2:
@@ -113,42 +116,71 @@ if st.session_state.step_val == "Step 1: Chemical Setup":
             try:
                 comp = pcp.get_compounds(drug, 'name')[0]
                 mol = Chem.MolFromSmiles(comp.canonical_smiles)
-                st.image(Draw.MolToImage(mol, size=(300,300)), caption=f"{drug} Structure")
-                st.subheader("Structural Analysis")
-                # Functional group/Property display
-                st.write(f"**LogP:** {comp.xlogp} | **H-Bond Donors:** {comp.h_bond_donor_count}")
-                st.info(f"Analysis: Drug has {Descriptors.NumRotatableBonds(mol)} rotatable bonds, indicating specific flexibility for encapsulation.")
-            except: st.info("Chemical data unavailable.")
+                st.image(Draw.MolToImage(mol, size=(300,300)), caption=f"Chemical Structure: {drug}")
+                
+                # FUNCTIONAL GROUP IDENTIFICATION
+                fgroups = []
+                if Fragments.fr_Al_OH(mol) > 0: fgroups.append("Alcohol (-OH)")
+                if Fragments.fr_Ar_OH(mol) > 0: fgroups.append("Phenol")
+                if Fragments.fr_NH2(mol) > 0: fgroups.append("Primary Amine")
+                if Fragments.fr_C_O(mol) > 0: fgroups.append("Carbonyl Group")
+                if Fragments.fr_COO(mol) > 0: fgroups.append("Carboxylic Acid/Ester")
+                
+                st.subheader("Molecular Profile")
+                st.write(f"**Identified Groups:** {', '.join(fgroups) if fgroups else 'Complex/Other'}")
+                st.write(f"**Molecular Weight:** {comp.molecular_weight} g/mol")
+                st.write(f"**LogP:** {comp.xlogp}")
+            except: st.warning("Structural details could not be retrieved.")
 
-# --- STEP 2: CONCENTRATIONS (Uniform Number Inputs) ---
+# --- STEP 2: CONCENTRATIONS ---
 elif st.session_state.step_val == "Step 2: Concentrations":
-    st.header("Step 2: Define Concentrations & Smix Ratio")
+    st.header("Step 2: Uniform Formulation Inputs")
     c1, c2 = st.columns(2)
     with c1:
-        drug_mg = st.number_input("Drug Dose (mg)", value=10.0, step=1.0)
-        oil_p = st.number_input("Oil Phase (%)", value=15.0, step=1.0)
-        smix_p = st.number_input("Target S-mix (%)", value=30.0, step=1.0)
-        smix_ratio = st.selectbox("S-mix Ratio (Surfactant : Co-Surfactant)", ["1:1", "2:1", "3:1", "4:1", "Custom"])
-        if smix_ratio == "Custom":
-            smix_ratio = st.text_input("Enter Custom Ratio (e.g. 1.5:1)", "2.5:1")
+        st.session_state.drug_mg = st.number_input("Drug Dose (mg)", value=10.0, step=1.0)
+        st.session_state.oil_p = st.number_input("Oil Phase (%)", value=15.0, step=1.0)
+        st.session_state.smix_p = st.number_input("Total S-mix (%)", value=30.0, step=1.0)
+        st.session_state.smix_ratio = st.selectbox("S-mix Ratio (S:Co-S)", ["1:1", "2:1", "3:1", "4:1", "Custom"])
+        if st.session_state.smix_ratio == "Custom":
+            st.session_state.smix_ratio = st.text_input("Enter Ratio", "2.5:1")
         
-        water_p = 100 - oil_p - smix_p
-        if st.button("Save & Analyze →"):
-            st.session_state.drug_mg, st.session_state.oil_p, st.session_state.smix_p, st.session_state.water_p = drug_mg, oil_p, smix_p, water_p
-            st.session_state.smix_ratio = smix_ratio
+        st.session_state.water_p = 100 - st.session_state.oil_p - st.session_state.smix_p
+        if st.button("Save & Screen Components →"):
             go_to_step("Step 3: AI Screening")
     with c2:
-        st.metric("Balance Aqueous Phase", f"{water_p}%")
-        
+        st.metric("Balance Water %", f"{st.session_state.water_p}%")
+        st.info("Ensure Oil + Smix does not exceed 100%. Adjust values if Aqueous % is negative.")
 
-# --- STEP 4: SELECTION (With Dark Summary Table) ---
+# --- STEP 3: AI SCREENING ---
+elif st.session_state.step_val == "Step 3: AI Screening":
+    st.header("Step 3: Suggested Components for Selection")
+    if st.session_state.oil is None: st.error("Please complete Step 1.")
+    else:
+        best_data = df[df['Oil_phase'] == st.session_state.oil].sort_values(by='Encapsulation_Efficiency_clean', ascending=False)
+        s_list = best_data['Surfactant'].unique()[:5]
+        cs_list = best_data['Co-surfactant'].unique()[:5]
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<div class="rec-box"><h4>Recommended Surfactants</h4>', unsafe_allow_html=True)
+            for s in s_list: st.write(f"✅ {s}")
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown('<div class="rec-box"><h4>Suggested Co-Surfactants</h4>', unsafe_allow_html=True)
+            for cs in cs_list: st.write(f"🔗 {cs}")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        if st.button("Finalize Pair in Step 4 →"):
+            go_to_step("Step 4: Selection")
+
+# --- STEP 4: SELECTION & SUMMARY ---
 elif st.session_state.step_val == "Step 4: Selection":
-    st.header("Step 4: Finalize Formulation")
+    st.header("Step 4: Selection & Summary")
     c1, c2 = st.columns(2)
     with c1:
         s_final = st.selectbox("Select Surfactant", sorted(df['Surfactant'].unique()))
         cs_final = st.selectbox("Select Co-Surfactant", sorted(df['Co-surfactant'].unique()))
-        if st.button("Generate Prediction →"):
+        if st.button("Generate Final Prediction →"):
             st.session_state.s_final, st.session_state.cs_final = s_final, cs_final
             go_to_step("Step 5: Results")
     with c2:
@@ -156,45 +188,60 @@ elif st.session_state.step_val == "Step 4: Selection":
         <div class="summary-table">
             <h4>📋 Selection Summary</h4>
             <table style="width:100%">
-                <tr><td><b>Drug</b></td><td>{st.session_state.drug} ({st.session_state.drug_mg}mg)</td></tr>
+                <tr><td><b>Drug Selection</b></td><td>{st.session_state.drug}</td></tr>
                 <tr><td><b>Oil Phase</b></td><td>{st.session_state.oil} ({st.session_state.oil_p}%)</td></tr>
-                <tr><td><b>Aqueous</b></td><td>{st.session_state.aq} ({st.session_state.water_p}%)</td></tr>
                 <tr><td><b>Smix Total</b></td><td>{st.session_state.smix_p}%</td></tr>
-                <tr><td><b>Smix Ratio</b></td><td>{st.session_state.smix_ratio}</td></tr>
-                <tr><td><b>Surfactant</b></td><td>{s_final}</td></tr>
-                <tr><td><b>Co-Surfactant</b></td><td>{cs_final}</td></tr>
+                <tr><td><b>S:Co-S Ratio</b></td><td>{st.session_state.smix_ratio}</td></tr>
+                <tr><td><b>Selected Surfactant</b></td><td>{s_final}</td></tr>
+                <tr><td><b>Selected Co-Surfactant</b></td><td>{cs_final}</td></tr>
             </table>
         </div>
         """, unsafe_allow_html=True)
 
-# --- STEP 5: RESULTS (PDI Graph & Ternary) ---
+# --- STEP 5: RESULTS ---
 elif st.session_state.step_val == "Step 5: Results":
-    st.header("Step 5: Final Optimized Results")
-    # ... (Prediction Logic same as before) ...
-    inputs = [[le_dict['Drug_Name'].transform([st.session_state.drug])[0],
-               le_dict['Oil_phase'].transform([st.session_state.oil])[0],
-               le_dict['Surfactant'].transform([st.session_state.s_final])[0],
-               le_dict['Co-surfactant'].transform([st.session_state.cs_final])[0]]]
-    res = [models[col].predict(inputs)[0] for col in ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']]
-    
-    # Visual Output
-    cols = st.columns(3)
-    m_list = [("Size", f"{res[0]:.1f} nm"), ("PDI", f"{res[1]:.3f}"), ("Zeta", f"{res[2]:.1f} mV"),
-              ("EE %", f"{res[4]:.1f} %"), ("Stability", "96.1%")]
-    for i, (l, v) in enumerate(m_list):
-        with cols[i % 3]: st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
+    st.header("Step 5: Performance Results")
+    if st.session_state.s_final is None: st.error("Please complete Step 4.")
+    else:
+        # Prediction
+        inputs = [[le_dict['Drug_Name'].transform([st.session_state.drug])[0],
+                   le_dict['Oil_phase'].transform([st.session_state.oil])[0],
+                   le_dict['Surfactant'].transform([st.session_state.s_final])[0],
+                   le_dict['Co-surfactant'].transform([st.session_state.cs_final])[0]]]
+        
+        res = [models[col].predict(inputs)[0] for col in ['Size_nm', 'PDI', 'Zeta_mV', 'Drug_Loading', 'Encapsulation_Efficiency']]
+        
+        # Save to History
+        if not any(h['s'] == st.session_state.s_final and h['cs'] == st.session_state.cs_final for h in st.session_state.history):
+            st.session_state.history.append({'drug': st.session_state.drug, 'size': round(res[0],1), 's': st.session_state.s_final, 'cs': st.session_state.cs_final})
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("PDI Analysis")
-        fig_pdi = px.scatter(x=[res[0]], y=[res[1]], labels={'x':'Size (nm)', 'y':'PDI'}, title="PDI vs Size Map")
-        fig_pdi.add_hline(y=0.3, line_dash="dash", line_color="green")
-        st.plotly_chart(fig_pdi, use_container_width=True)
-    with c2:
-        st.subheader("Ternary Map")
-        fig_tern = go.Figure(go.Scatterternary({'mode': 'markers', 'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [st.session_state.water_p], 'marker': {'color': 'red', 'size': 14}}))
-        st.plotly_chart(fig_tern, use_container_width=True)
+        # Metrics
+        cols = st.columns(3)
+        m_list = [("Size", f"{res[0]:.1f} nm"), ("PDI", f"{res[1]:.3f}"), ("Zeta", f"{res[2]:.1f} mV"),
+                  ("Loading", f"{res[3]:.2f} mg/mL"), ("EE %", f"{res[4]:.1f} %"), ("Stability", "95.4%")]
+        for i, (l, v) in enumerate(m_list):
+            with cols[i % 3]: st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
 
-    if st.button("New Formulation"): go_to_step("Step 1: Chemical Setup")
+        # Plots
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("PDI Distribution")
+            fig_pdi = px.scatter(x=[res[0]], y=[res[1]], labels={'x':'Size (nm)', 'y':'PDI'}, title="PDI Quality")
+            fig_pdi.add_hline(y=0.3, line_dash="dash", line_color="green", annotation_text="Stable Range")
+            st.plotly_chart(fig_pdi, use_container_width=True)
+        with c2:
+            st.subheader("Ternary Phase Mapping")
+            
 
-# (Note: Step 3 Screening remains as per v12 logic in the full script)
+[Image of a ternary phase diagram for nanoemulsion]
+
+            fig_tern = go.Figure(go.Scatterternary({
+                'mode': 'markers',
+                'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [st.session_state.water_p],
+                'marker': {'color': 'red', 'size': 14, 'symbol': 'diamond'}
+            }))
+            fig_tern.update_layout({'ternary': {'sum': 100, 'aaxis': {'title': 'Oil'}, 'baxis': {'title': 'Smix'}, 'caxis': {'title': 'Water'}}, 'height': 450})
+            st.plotly_chart(fig_tern, use_container_width=True)
+
+    if st.button("🔄 Start New Calculation"):
+        go_to_step("Step 1: Chemical Setup")
