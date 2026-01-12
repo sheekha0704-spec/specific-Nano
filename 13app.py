@@ -194,7 +194,6 @@ elif st.session_state.step_val == "Step 5: Results":
         st.subheader("Ternary Phase Diagram")
         
 
-[Image of a ternary phase diagram for nanoemulsion]
 
         fig_tern = go.Figure(go.Scatterternary({
             'mode': 'markers',
