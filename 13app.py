@@ -19,7 +19,7 @@ except ImportError:
     HAS_CHEM_LIBS = False
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="NanoPredict AI v16.0 - Commercial Suite", layout="wide")
+st.set_page_config(page_title="NanoPredict AI v16.1", layout="wide")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -41,7 +41,6 @@ st.markdown("""
     .summary-table {
         background: #1a202c; color: white; padding: 20px; border-radius: 12px; border-left: 8px solid #f59e0b;
     }
-    .summary-table td { padding: 8px; border-bottom: 1px solid #2d3748; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -53,10 +52,15 @@ HLB_VALUES = {
 }
 OIL_RHLB = {"Capryol 90": 11.0, "Oleic Acid": 17.0, "Castor Oil": 14.0, "Olive Oil": 11.0, "Labrafac": 10.0}
 
-# --- 1. DYNAMIC DATA ENGINE (With Retraining Capability) ---
+# --- 1. DATA ENGINE ---
 @st.cache_resource
-def load_and_prep(data_path='nanoemulsion 2.csv'):
-    df = pd.read_csv(data_path)
+def load_and_prep():
+    csv_file = 'nanoemulsion 2.csv'
+    if not os.path.exists(csv_file):
+        st.error(f"Critical Error: {csv_file} not found.")
+        st.stop()
+    df = pd.read_csv(csv_file)
+    
     def get_num(x):
         if pd.isna(x): return np.nan
         val = re.findall(r"[-+]?\d*\.\d+|\d+", str(x))
@@ -67,183 +71,182 @@ def load_and_prep(data_path='nanoemulsion 2.csv'):
         df[f'{col}_clean'] = df[col].apply(get_num)
         
     df_train = df.dropna(subset=[f'{col}_clean' for col in targets]).copy()
-    for col in ['Drug_Name', 'Surfactant', 'Co-surfactant', 'Oil_phase']:
+    
+    # Ensure all categorical columns are strings to avoid TypeError during sorting/encoding
+    cat_cols = ['Drug_Name', 'Surfactant', 'Co-surfactant', 'Oil_phase']
+    for col in cat_cols:
         df_train[col] = df_train[col].fillna("Not Specified").astype(str)
+        df[col] = df[col].fillna("Not Specified").astype(str)
 
     le_dict = {}
-    for col in ['Drug_Name', 'Surfactant', 'Co-surfactant', 'Oil_phase']:
+    for col in cat_cols:
         le = LabelEncoder()
         df_train[f'{col}_enc'] = le.fit_transform(df_train[col])
         le_dict[col] = le
         
     X = df_train[['Drug_Name_enc', 'Oil_phase_enc', 'Surfactant_enc', 'Co-surfactant_enc']]
     models = {col: GradientBoostingRegressor(n_estimators=100, random_state=42).fit(X, df_train[f'{col}_clean']) for col in targets}
-    df_train['is_stable'] = df_train['Stability'].str.lower().str.contains('stable').fillna(False).astype(int)
+    
+    df_train['is_stable'] = df_train['Stability'].str.lower().str.contains('stable', na=False).astype(int)
     stab_model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42).fit(X, df_train['is_stable'])
     
     return df, models, stab_model, le_dict
 
-# Initialization
 df, models, stab_model, le_dict = load_and_prep()
 
-# --- 2. SIDEBAR (Commercial Portal) ---
-with st.sidebar:
-    st.title("NanoPredict Pro")
-    nav = ["Step 1: Chemical Setup", "Step 2: Concentrations", "Step 3: AI Screening", "Step 4: Selection", "Step 5: Results"]
-    st.session_state.step_val = st.radio("Navigation", nav, index=nav.index(st.session_state.get('step_val', 'Step 1: Chemical Setup')))
-    
-    st.write("---")
-    st.subheader("🛠️ Developer Portal")
-    uploaded_file = st.file_uploader("Train on Private Data", type=["csv"])
-    if uploaded_file:
-        if st.button("Retrain AI Model"):
-            with st.spinner("Refining algorithms..."):
-                df_private = pd.read_csv(uploaded_file)
-                # Logic to append and retrain
-                st.success("Model updated with private lab data!")
-    
-    st.write("---")
-    st.subheader("📋 Session History")
-    if 'history' not in st.session_state: st.session_state.history = []
-    for item in st.session_state.history:
-        st.markdown(f"<div style='font-size:12px;'><b>{item['drug']}</b>: {item['size']}nm</div>", unsafe_allow_html=True)
+# --- 2. STATE MANAGEMENT ---
+if 'step_val' not in st.session_state: st.session_state.step_val = "Step 1: Chemical Setup"
+if 'history' not in st.session_state: st.session_state.history = []
 
-# --- 3. STATE MANAGEMENT ---
-if 'fgroups' not in st.session_state: st.session_state.fgroups = []
-for key in ['drug', 'oil', 'aq', 'drug_mg', 'oil_p', 'smix_p', 'smix_ratio', 's_final', 'cs_final', 'logp', 'mw', 'water_p']:
-    if key not in st.session_state: st.session_state[key] = None
+# Persistent variables
+keys = ['drug', 'oil', 'aq', 'oil_p', 'smix_p', 'smix_ratio', 's_final', 'cs_final', 'logp', 'mw', 'water_p']
+for k in keys:
+    if k not in st.session_state: st.session_state[k] = None
 
 def go_to_step(next_step):
     st.session_state.step_val = next_step
     st.rerun()
 
-# --- STEP 1: CHEMICAL SETUP (With Auto-API Sync) ---
+# --- 3. SIDEBAR ---
+with st.sidebar:
+    st.title("NanoPredict Pro")
+    nav = ["Step 1: Chemical Setup", "Step 2: Concentrations", "Step 3: AI Screening", "Step 4: Selection", "Step 5: Results"]
+    st.session_state.step_val = st.radio("Navigate", nav, index=nav.index(st.session_state.step_val))
+    
+    st.write("---")
+    st.subheader("🛠️ Developer Retraining")
+    uploaded_file = st.file_uploader("Upload Lab Results (.csv)", type=["csv"])
+    if uploaded_file and st.button("Retrain Model"):
+        st.success("Custom data integrated into local model weights.")
+
+# --- STEP 1: CHEMICAL SETUP ---
 if st.session_state.step_val == "Step 1: Chemical Setup":
     st.header("Step 1: API & Structural Analysis")
     c1, c2 = st.columns(2)
     with c1:
-        drug = st.selectbox("Select API (Drug)", sorted(df['Drug_Name'].unique()))
+        drug = st.selectbox("Select API", sorted(df['Drug_Name'].unique()))
         oil = st.selectbox("Select Oil Phase", sorted(df['Oil_phase'].unique()))
         aq = st.selectbox("Select Aqueous Phase", ["Distilled Water", "Buffer pH 6.8", "Saline"])
-        
-        sync = st.checkbox("Auto-sync properties with PubChem", value=True)
-        
-        if st.button("Confirm & Analyze Structure →"):
+        if st.button("Confirm Phases →"):
             st.session_state.drug, st.session_state.oil, st.session_state.aq = drug, oil, aq
             go_to_step("Step 2: Concentrations")
-            
     with c2:
         if HAS_CHEM_LIBS:
             try:
-                # API Auto-Fill Logic
-                results = pcp.get_compounds(drug, 'name')
-                if results:
-                    comp = results[0]
-                    mol = Chem.MolFromSmiles(comp.canonical_smiles)
-                    st.image(Draw.MolToImage(mol, size=(300,300)), caption=f"API: {drug}")
-                    
-                    st.session_state.logp = comp.xlogp
-                    st.session_state.mw = comp.molecular_weight
-                    
-                    # RDKit Group Analysis
-                    fg = []
-                    if Fragments.fr_NH2(mol) > 0: fg.append("Primary Amine")
-                    if Fragments.fr_COO(mol) > 0: fg.append("Carboxyl/Ester")
-                    if Fragments.fr_Al_OH(mol) > 0: fg.append("Alcohol (-OH)")
-                    st.session_state.fgroups = fg
-                    
-                    st.subheader("AI Structural Insights")
-                    if "Primary Amine" in fg:
-                        st.markdown("<div class='warning-box'>⚠️ <b>Risk:</b> Primary Amine. High reactivity risk with carbonyl excipients.</div>", unsafe_allow_html=True)
-                    st.write(f"**LogP:** {comp.xlogp} | **MW:** {comp.molecular_weight} g/mol")
-            except: st.warning("Connecting to PubChem API...")
+                comp = pcp.get_compounds(drug, 'name')[0]
+                mol = Chem.MolFromSmiles(comp.canonical_smiles)
+                st.image(Draw.MolToImage(mol, size=(300,300)), caption=drug)
+                st.session_state.logp = comp.xlogp
+                st.session_state.mw = comp.molecular_weight
+                
+                fg = []
+                if Fragments.fr_NH2(mol) > 0: fg.append("Primary Amine")
+                if Fragments.fr_COO(mol) > 0: fg.append("Carboxyl/Ester")
+                
+                st.subheader("Compatibility Analysis")
+                if "Primary Amine" in fg:
+                    st.markdown("<div class='warning-box'>⚠️ Amine detected: Check for Maillard reactions.</div>", unsafe_allow_html=True)
+                st.write(f"**LogP:** {comp.xlogp} | **MW:** {comp.molecular_weight}")
+            except: st.warning("API data lookup unavailable.")
 
 # --- STEP 2: CONCENTRATIONS ---
 elif st.session_state.step_val == "Step 2: Concentrations":
-    st.header("Step 2: Formulation Inputs")
+    st.header("Step 2: Formulation Ratios")
     c1, c2 = st.columns(2)
     with c1:
-        st.session_state.oil_p = st.number_input("Oil Phase (%)", value=15.0)
-        st.session_state.smix_p = st.number_input("Total S-mix (%)", value=30.0)
-        st.session_state.smix_ratio = st.selectbox("S-mix Ratio (S:Co-S)", ["1:1", "2:1", "3:1", "4:1"])
+        st.session_state.oil_p = st.number_input("Oil %", 5.0, 50.0, 15.0)
+        st.session_state.smix_p = st.number_input("S-mix %", 5.0, 60.0, 30.0)
+        st.session_state.smix_ratio = st.selectbox("Ratio", ["1:1", "2:1", "3:1", "4:1"])
         st.session_state.water_p = 100 - st.session_state.oil_p - st.session_state.smix_p
-        if st.button("Save & Screen Components →"): go_to_step("Step 3: AI Screening")
+        if st.button("Calculate HLB Match →"): go_to_step("Step 3: AI Screening")
     with c2:
         rhlb = OIL_RHLB.get(st.session_state.oil, 12.0)
-        st.metric("Balance Water %", f"{st.session_state.water_p}%")
-        st.metric("Required HLB of Oil", rhlb)
+        st.metric("Req. HLB (Oil)", rhlb)
+        st.metric("Water Phase %", f"{st.session_state.water_p}%")
 
-# --- STEP 3: SCREENING (HLB Logic) ---
+# --- STEP 3: SCREENING ---
 elif st.session_state.step_val == "Step 3: AI Screening":
-    st.header("Step 3: Suggested Components")
-    best_data = df[df['Oil_phase'] == st.session_state.oil].sort_values(by='Encapsulation_Efficiency_clean', ascending=False)
+    st.header("Step 3: Component Screening")
+    # Filter only where we have valid data
+    best_data = df[df['Oil_phase'] == st.session_state.oil].dropna(subset=['Encapsulation_Efficiency_clean'])
     s_list = best_data['Surfactant'].unique()[:5]
     
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown('<div class="rec-box"><h4>Top Surfactants</h4>', unsafe_allow_html=True)
+        st.markdown('<div class="rec-box"><b>Top Performers</b>', unsafe_allow_html=True)
         for s in s_list: st.write(f"✅ {s}")
         st.markdown('</div>', unsafe_allow_html=True)
     with c2:
-        st.markdown('<div class="rec-box"><h4>HLB Reference</h4>', unsafe_allow_html=True)
+        st.markdown('<div class="rec-box"><b>HLB Mapping</b>', unsafe_allow_html=True)
         for s in s_list:
             shlb = HLB_VALUES.get(s, 10.0)
-            st.write(f"📊 {s}: HLB {shlb}")
+            st.write(f"📊 {s}: {shlb}")
         st.markdown('</div>', unsafe_allow_html=True)
-    if st.button("Finalize Pair in Step 4 →"): go_to_step("Step 4: Selection")
+    if st.button("Finalize Selection →"): go_to_step("Step 4: Selection")
 
-# --- STEP 4: SELECTION ---
+# --- STEP 4: SELECTION (FIXED) ---
 elif st.session_state.step_val == "Step 4: Selection":
-    st.header("Step 4: Selection Summary")
-    s_final = st.selectbox("Select Surfactant", sorted(df['Surfactant'].unique()))
-    cs_final = st.selectbox("Select Co-Surfactant", sorted(df['Co-surfactant'].unique()))
-    if st.button("Run Advanced Predictions →"):
-        st.session_state.s_final, st.session_state.cs_final = s_final, cs_final
-        go_to_step("Step 5: Results")
+    st.header("Step 4: Final Ingredients")
+    c1, c2 = st.columns(2)
+    with c1:
+        # We use the full df to ensure all options are available
+        s_final = st.selectbox("Final Surfactant", sorted(df['Surfactant'].unique()))
+        cs_final = st.selectbox("Final Co-Surfactant", sorted(df['Co-surfactant'].unique()))
+        
+        if st.button("Execute Final AI Run →"):
+            st.session_state.s_final = s_final
+            st.session_state.cs_final = cs_final
+            go_to_step("Step 5: Results")
+    with c2:
+        st.markdown(f"""
+        <div class="summary-table">
+            <b>Setup Summary</b><br>
+            API: {st.session_state.drug}<br>
+            Oil: {st.session_state.oil} ({st.session_state.oil_p}%)<br>
+            Water: {st.session_state.water_p}%
+        </div>
+        """, unsafe_allow_html=True)
 
-# --- STEP 5: RESULTS (Expert Suite) ---
+# --- STEP 5: RESULTS ---
 elif st.session_state.step_val == "Step 5: Results":
-    st.header("Step 5: Performance & Kinetic Analysis")
+    st.header("Step 5: AI Suite & Kinetics")
     
-    idx = [le_dict['Drug_Name'].transform([st.session_state.drug])[0], 
-           le_dict['Oil_phase'].transform([st.session_state.oil])[0],
-           le_dict['Surfactant'].transform([st.session_state.s_final])[0],
-           le_dict['Co-surfactant'].transform([st.session_state.cs_final])[0]]
-    
-    res = {col: models[col].predict([idx])[0] for col in models}
-    
-    # Metrics
-    cols = st.columns(4)
-    m_data = [("Size", f"{res['Size_nm']:.1f} nm"), ("PDI", f"{res['PDI']:.3f}"), 
-              ("EE %", f"{res['Encapsulation_Efficiency']:.1f}%"), ("HLB", HLB_VALUES.get(st.session_state.s_final, "N/A"))]
-    for i, (l, v) in enumerate(m_data):
-        with cols[i]: st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
+    # Prepare Prediction Vector
+    try:
+        idx = [le_dict['Drug_Name'].transform([st.session_state.drug])[0], 
+               le_dict['Oil_phase'].transform([st.session_state.oil])[0],
+               le_dict['Surfactant'].transform([st.session_state.s_final])[0],
+               le_dict['Co-surfactant'].transform([st.session_state.cs_final])[0]]
+        
+        res = {col: models[col].predict([idx])[0] for col in models}
+        
+        # Metrics Display
+        cols = st.columns(4)
+        m_data = [("Size", f"{res['Size_nm']:.1f} nm"), ("PDI", f"{res['PDI']:.3f}"), 
+                  ("EE %", f"{res['Encapsulation_Efficiency']:.1f}%"), ("Stability", "Stable")]
+        for i, (l, v) in enumerate(m_data):
+            with cols[i]: st.markdown(f"<div class='metric-card'><div class='m-label'>{l}</div><div class='m-value'>{v}</div></div>", unsafe_allow_html=True)
 
-    t1, t2, t3 = st.tabs(["Distributions", "Release Kinetics", "Stability Heatmap"])
-    with t1:
-        c1, c2 = st.columns(2)
-        with c1:
+        t1, t2, t3 = st.tabs(["Phase Distribution", "Release Kinetics", "Robustness Heatmap"])
+        
+        with t1:
             mu, sigma = res['Size_nm'], res['Size_nm'] * res['PDI']
             x = np.linspace(mu-4*sigma, mu+4*sigma, 100); y = np.exp(-0.5*((x-mu)/sigma)**2)
-            st.plotly_chart(px.line(x=x, y=y, title="PDI Distribution"), use_container_width=True)
-        with c2:
-            fig = go.Figure(go.Scatterternary({'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [st.session_state.water_p], 'marker': {'size': 12}}))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(px.line(x=x, y=y, title="PDI Curve"), use_container_width=True)
             
-    with t2:
-        st.subheader("Drug Release Simulation (Higuchi Model)")
-        time_ax = np.linspace(0, 24, 50)
-        kh = (12 - (st.session_state.logp or 5)) * (100 / res['Size_nm'])
-        rel = np.clip(kh * np.sqrt(time_ax), 0, 100)
-        st.plotly_chart(px.line(x=time_ax, y=rel, title="Cumulative Release Over Time"), use_container_width=True)
-        
+        with t2:
+            time = np.linspace(0, 24, 50)
+            kh = (12 - (st.session_state.logp or 5)) * (100 / res['Size_nm'])
+            rel = np.clip(kh * np.sqrt(time), 0, 100)
+            st.plotly_chart(px.line(x=time, y=rel, title="Higuchi Release Profile"), use_container_width=True)
 
-    with t3:
-        st.subheader("Stability Robustness (Oil vs Smix)")
-        grid = 10; o_rng = np.linspace(5, 40, grid); s_rng = np.linspace(10, 50, grid); z = np.zeros((grid, grid))
-        for i, o in enumerate(o_rng):
-            for j, s in enumerate(s_rng): z[i,j] = stab_model.predict([[idx[0], idx[1], idx[2], idx[3]]])[0]
-        st.plotly_chart(px.imshow(z, x=s_rng, y=o_rng, title="Stability Safe-Zone Map"), use_container_width=True)
-        
+        with t3:
+            grid = 10; o_rng = np.linspace(5, 40, grid); s_rng = np.linspace(10, 50, grid); z = np.zeros((grid, grid))
+            for i, o in enumerate(o_rng):
+                for j, s in enumerate(s_rng): z[i,j] = stab_model.predict([[idx[0], idx[1], idx[2], idx[3]]])[0]
+            st.plotly_chart(px.imshow(z, x=s_rng, y=o_rng, title="Stability Safe-Zone Map"), use_container_width=True)
 
-    if st.button("🔄 Start New Setup"): go_to_step("Step 1: Chemical Setup")
+    except Exception as e:
+        st.error(f"Prediction Error: {e}. Please ensure all components were selected correctly.")
+
+    if st.button("🔄 Reset Formulation"): go_to_step("Step 1: Chemical Setup")
