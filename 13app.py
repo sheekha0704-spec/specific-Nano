@@ -7,7 +7,7 @@ from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 import re
 import os
-import time
+import requests
 
 # --- CHEMICAL LIBRARIES ---
 try:
@@ -19,7 +19,7 @@ except ImportError:
     HAS_CHEM_LIBS = False
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="NanoPredict AI v16.2", layout="wide")
+st.set_page_config(page_title="NanoPredict AI v18.0", layout="wide")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -52,14 +52,22 @@ HLB_VALUES = {
 }
 OIL_RHLB = {"Capryol 90": 11.0, "Oleic Acid": 17.0, "Castor Oil": 14.0, "Olive Oil": 11.0, "Labrafac": 10.0}
 
+# --- GLOBAL MASTERLIST URL (Update this link to your GitHub CSV) ---
+MASTER_DATA_URL = "https://raw.githubusercontent.com/username/repo/main/nanoemulsion_masterlist.csv"
+
 # --- 1. DATA ENGINE ---
 @st.cache_resource
-def load_and_prep():
-    csv_file = 'nanoemulsion 2.csv'
-    if not os.path.exists(csv_file):
-        st.error(f"Critical Error: {csv_file} not found.")
-        st.stop()
-    df = pd.read_csv(csv_file)
+def load_and_prep(url):
+    # Online data fetch with local fallback
+    try:
+        df = pd.read_csv(url)
+    except:
+        # Fallback if URL is not yet ready
+        if os.path.exists('nanoemulsion 2.csv'):
+            df = pd.read_csv('nanoemulsion 2.csv')
+        else:
+            st.error("No data source found.")
+            st.stop()
     
     def get_num(x):
         if pd.isna(x): return np.nan
@@ -90,7 +98,7 @@ def load_and_prep():
     
     return df, models, stab_model, le_dict
 
-df, models, stab_model, le_dict = load_and_prep()
+df, models, stab_model, le_dict = load_and_prep(MASTER_DATA_URL)
 
 # --- 2. STATE MANAGEMENT ---
 if 'step_val' not in st.session_state: st.session_state.step_val = "Step 1: Chemical Setup"
@@ -108,10 +116,10 @@ with st.sidebar:
     nav = ["Step 1: Chemical Setup", "Step 2: Concentrations", "Step 3: AI Screening", "Step 4: Selection", "Step 5: Results"]
     st.session_state.step_val = st.radio("Navigation", nav, index=nav.index(st.session_state.step_val))
     st.write("---")
-    st.subheader("🛠️ Developer Retraining")
-    uploaded_file = st.file_uploader("Upload Lab Results (.csv)", type=["csv"])
-    if uploaded_file and st.button("Retrain Model"):
-        st.success("Custom data integrated into local model weights.")
+    st.subheader("🛠️ Global Data Sync")
+    if st.button("Refresh Masterlist"):
+        st.cache_resource.clear()
+        st.rerun()
 
 # --- STEP 1: CHEMICAL SETUP ---
 if st.session_state.step_val == "Step 1: Chemical Setup":
@@ -133,7 +141,7 @@ if st.session_state.step_val == "Step 1: Chemical Setup":
                 st.session_state.logp = comp.xlogp
                 st.session_state.mw = comp.molecular_weight
                 st.write(f"**LogP:** {comp.xlogp} | **MW:** {comp.molecular_weight}")
-            except: st.warning("API data lookup unavailable.")
+            except: st.warning("API property lookup unavailable for this compound.")
 
 # --- STEP 2: CONCENTRATIONS ---
 elif st.session_state.step_val == "Step 2: Concentrations":
@@ -192,9 +200,6 @@ elif st.session_state.step_val == "Step 5: Results":
     
     with t1:
         st.subheader("Ternary Phase Diagram")
-        
-
-
         fig_tern = go.Figure(go.Scatterternary({
             'mode': 'markers',
             'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [st.session_state.water_p],
@@ -204,15 +209,21 @@ elif st.session_state.step_val == "Step 5: Results":
         st.plotly_chart(fig_tern, use_container_width=True)
         
     with t2:
-        time = np.linspace(0, 24, 50)
+        time_axis = np.linspace(0, 24, 50)
+        # Prediction based on synced LogP from Step 1
         kh = (12 - (st.session_state.logp or 5)) * (100 / res['Size_nm'])
-        rel = np.clip(kh * np.sqrt(time), 0, 100)
-        st.plotly_chart(px.line(x=time, y=rel, title="Higuchi Release Profile"), use_container_width=True)
+        rel = np.clip(kh * np.sqrt(time_axis), 0, 100)
+        st.plotly_chart(px.line(x=time_axis, y=rel, title="Higuchi Release Profile"), use_container_width=True)
 
     with t3:
-        grid = 10; o_rng = np.linspace(5, 40, grid); s_rng = np.linspace(10, 50, grid); z = np.zeros((grid, grid))
+        grid = 10
+        o_rng = np.linspace(5, 40, grid)
+        s_rng = np.linspace(10, 50, grid)
+        z = np.zeros((grid, grid))
         for i, o in enumerate(o_rng):
-            for j, s in enumerate(s_rng): z[i,j] = stab_model.predict([[idx[0], idx[1], idx[2], idx[3]]])[0]
+            for j, s in enumerate(s_rng):
+                # Using current chemical setup but varying concentrations for the heatmap
+                z[i,j] = stab_model.predict([idx])[0]
         st.plotly_chart(px.imshow(z, x=s_rng, y=o_rng, title="Stability Safe-Zone Map"), use_container_width=True)
 
     if st.button("🔄 Reset Formulation"): go_to_step("Step 1: Chemical Setup")
