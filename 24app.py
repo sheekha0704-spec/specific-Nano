@@ -12,6 +12,13 @@ from rdkit.Chem import Draw, Descriptors
 import os
 import re
 
+# --- HELPER FUNCTIONS (Moved to top to fix NameError) ---
+def get_enc(le, val):
+    try:
+        return le.transform([val])[0]
+    except:
+        return 0
+
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="NanoPredict AI v2.0", layout="wide")
 
@@ -169,104 +176,86 @@ elif step_choice == "Step 5: Finalize":
     if st.button("Finalize for Analysis"): st.balloons()
 
 # --- STEP 6: AI PREDICTIONS & SURFACE MAPPING ---
-st.header("Step 6: AI Predictions & Surface Mapping")
+elif step_choice == "Step 6: Analysis":
+    st.header("Step 6: AI Predictions & Surface Mapping")
 
-if df_raw is None:
-    st.error("Missing Data: Please upload CSV in Step 1 to train the models.")
-else:
-    # 1. Prepare Input Data from previous steps
-    # We pull values from session state defined in Steps 1-5
-    input_df = pd.DataFrame([{
-        'Drug_Name_enc': get_enc(le_dict['Drug_Name'], st.session_state.get('drug_name', 'None')),
-        'Oil_phase_enc': get_enc(le_dict['Oil_phase'], st.session_state.get('oil_choice', 'None')),
-        'Surfactant_enc': get_enc(le_dict['Surfactant'], st.session_state.get('s_final', 'None')),
-        'Co-surfactant_enc': get_enc(le_dict['Co-surfactant'], st.session_state.get('cs_final', 'None')),
-        'HLB': 12.0  # Constant or derived from Surfactant mapping
-    }])
+    if df_raw is None:
+        st.error("Missing Data: Please upload CSV in Step 1 to train the models.")
+    else:
+        # Prepare Input
+        input_df = pd.DataFrame([{
+            'Drug_Name_enc': get_enc(le_dict['Drug_Name'], st.session_state.get('drug_name', 'None')),
+            'Oil_phase_enc': get_enc(le_dict['Oil_phase'], st.session_state.get('oil_choice', 'None')),
+            'Surfactant_enc': get_enc(le_dict['Surfactant'], st.session_state.get('s_final', 'None')),
+            'Co-surfactant_enc': get_enc(le_dict['Co-surfactant'], st.session_state.get('cs_final', 'None')),
+            'HLB': 12.0
+        }])
 
-    # 2. Main Screen Stability Status
-    # This shows the "Stable/Unstable" result prominently in the main area
-    is_stable = stab_model.predict(input_df)[0]
-    stable_text = "STABLE NANOEMULSION" if is_stable == 1 else "POTENTIAL PHASE SEPARATION"
-    
-    # Dynamic styling based on result
-    bg_color = "#d4edda" if is_stable == 1 else "#f8d7da"
-    txt_color = "#155724" if is_stable == 1 else "#721c24"
-    border_color = "#28a745" if is_stable == 1 else "#dc3545"
-
-    st.markdown(f"""
-        <div class="status-box" style="background-color: {bg_color}; color: {txt_color}; border-color: {border_color};">
-            {stable_text}
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 3. All Predicted Parameters (The 4 core metrics)
-    st.subheader("📋 Predicted Physical Characterization")
-    p_cols = st.columns(4)
-    target_metrics = ['Size_nm', 'PDI', 'Zeta_mV', 'Encapsulation_Efficiency']
-    
-    for i, target in enumerate(target_metrics):
-        prediction = models[target].predict(input_df)[0]
-        with p_cols[i]:
-            st.markdown(f"""
-                <div class='metric-card'>
-                    <div class='m-label'>{target.replace('_',' ')}</div>
-                    <div class='m-value'>{prediction:.2f}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-    # 4. Interactive Visualizations
-    tab1, tab2 = st.tabs(["📐 Ternary Phase Diagram", "🌊 3D Response Surface"])
-
-    with tab1:
-        # Ternary Plot showing the current composition point
-        fig_tern = go.Figure(go.Scatterternary({
-            'mode': 'markers',
-            'a': [st.session_state.get('oil_p', 15)],
-            'b': [st.session_state.get('smix_p', 30)],
-            'c': [st.session_state.get('water_p', 55)],
-            'marker': {
-                'symbol': "circle",
-                'color': "green" if is_stable == 1 else "red",
-                'size': 18,
-                'line': {'width': 2, 'color': 'white'}
-            },
-            'name': 'Current Formulation'
-        }))
-        fig_tern.update_layout(ternary={'sum': 100, 'aaxis':{'title': 'Oil %'}, 'baxis':{'title': 'Smix %'}, 'caxis':{'title': 'Water %'}})
-        st.plotly_chart(fig_tern, use_container_width=True)
-
-    with tab2:
-        # 3D Response Surface showing Smix vs Oil vs Particle Size
-        st.subheader("Surface Response: Size (nm) Optimization")
+        # Stability result prominence
+        is_stable = stab_model.predict(input_df)[0]
+        stable_text = "STABLE NANOEMULSION" if is_stable == 1 else "POTENTIAL PHASE SEPARATION"
         
-        # Creating a grid for the surface
-        o_range = np.linspace(5, 40, 20)
-        s_range = np.linspace(10, 60, 20)
-        O_mesh, S_mesh = np.meshgrid(o_range, s_range)
-        
-        # Generating predicted Z-axis values (Particle Size)
-        # In a real scenario, this uses the model.predict over the mesh
-        base_size = models['Size_nm'].predict(input_df)[0]
-        Z_mesh = base_size + (O_mesh * 0.4) - (S_mesh * 0.25)
-        
-        fig_surf = go.Figure(data=[go.Surface(z=Z_mesh, x=o_range, y=s_range, colorscale='Viridis')])
-        fig_surf.update_layout(
-            scene=dict(
-                xaxis_title='Oil %',
-                yaxis_title='Smix %',
-                zaxis_title='Predicted Size (nm)'
-            ),
-            margin=dict(l=0, r=0, b=0, t=40)
-        )
-        st.plotly_chart(fig_surf, use_container_width=True)
+        bg_color = "#d4edda" if is_stable == 1 else "#f8d7da"
+        txt_color = "#155724" if is_stable == 1 else "#721c24"
+        border_color = "#28a745" if is_stable == 1 else "#dc3545"
 
-    # 5. Explainable AI (SHAP)
-    if st.toggle("Show AI Decision Logic (SHAP Analysis)"):
-        st.write("This waterfall plot explains how each ingredient contributed to the Size prediction.")
-        explainer = shap.Explainer(models['Size_nm'], X_train)
-        shap_values = explainer(input_df)
+        st.markdown(f"""
+            <div class="status-box" style="background-color: {bg_color}; color: {txt_color}; border-color: {border_color};">
+                {stable_text}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Core Metrics
+        st.subheader("📋 Predicted Physical Characterization")
+        p_cols = st.columns(4)
+        target_metrics = ['Size_nm', 'PDI', 'Zeta_mV', 'Encapsulation_Efficiency']
         
-        fig_shap, ax = plt.subplots()
-        shap.plots.waterfall(shap_values[0], show=False)
-        st.pyplot(fig_shap)
+        for i, target in enumerate(target_metrics):
+            prediction = models[target].predict(input_df)[0]
+            with p_cols[i]:
+                st.markdown(f"""
+                    <div class='metric-card'>
+                        <div class='m-label'>{target.replace('_',' ')}</div>
+                        <div class='m-value'>{prediction:.2f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # Visualizations
+        tab1, tab2 = st.tabs(["📐 Ternary Phase Diagram", "🌊 3D Response Surface"])
+
+        with tab1:
+            
+            fig_tern = go.Figure(go.Scatterternary({
+                'mode': 'markers',
+                'a': [st.session_state.get('oil_p', 15)],
+                'b': [st.session_state.get('smix_p', 30)],
+                'c': [st.session_state.get('water_p', 55)],
+                'marker': {
+                    'symbol': "circle",
+                    'color': "green" if is_stable == 1 else "red",
+                    'size': 18,
+                    'line': {'width': 2, 'color': 'white'}
+                }
+            }))
+            fig_tern.update_layout(ternary={'sum': 100, 'aaxis':{'title': 'Oil %'}, 'baxis':{'title': 'Smix %'}, 'caxis':{'title': 'Water %'}})
+            st.plotly_chart(fig_tern, use_container_width=True)
+
+        with tab2:
+            
+            st.subheader("Surface Response: Size (nm) Optimization")
+            o_range = np.linspace(5, 40, 20)
+            s_range = np.linspace(10, 60, 20)
+            O_mesh, S_mesh = np.meshgrid(o_range, s_range)
+            base_size = models['Size_nm'].predict(input_df)[0]
+            Z_mesh = base_size + (O_mesh * 0.4) - (S_mesh * 0.25)
+            
+            fig_surf = go.Figure(data=[go.Surface(z=Z_mesh, x=o_range, y=s_range, colorscale='Viridis')])
+            fig_surf.update_layout(scene=dict(xaxis_title='Oil %', yaxis_title='Smix %', zaxis_title='Predicted Size (nm)'))
+            st.plotly_chart(fig_surf, use_container_width=True)
+
+        if st.toggle("Show AI Decision Logic (SHAP Analysis)"):
+            explainer = shap.Explainer(models['Size_nm'], X_train)
+            shap_values = explainer(input_df)
+            fig_shap, ax = plt.subplots()
+            shap.plots.waterfall(shap_values[0], show=False)
+            st.pyplot(fig_shap)
