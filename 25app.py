@@ -142,6 +142,14 @@ elif step_choice == "Step 3: Component AI & Ratios":
         st.subheader("Calculated Smix ($K_{m}$)")
         km_val = int(st.session_state.km_ratio.split(":")[0])
         st.latex(rf"K_{{m}} = \frac{{S}}{{CoS}} = {km_val}")
+        st.write("---")
+    if df_raw is not None:
+        # Filter data for the selected oil
+        recs = df_raw[df_raw['Oil_phase'] == st.session_state.oil_choice]
+        if not recs.empty:
+            # Predict best surfactant based on historical Encapsulation Efficiency
+            best_s = recs.groupby('Surfactant')['Encapsulation_Efficiency_clean'].mean().idxmax()
+            st.success(f"**AI Prediction:** Based on a {st.session_state.km_ratio} ratio, the optimal surfactant is **{best_s}**.")
 
 # --- STEP 4: PHASE RATIOS ---
 elif step_choice == "Step 4: Phase Ratios":
