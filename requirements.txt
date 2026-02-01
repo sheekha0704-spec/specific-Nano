@@ -3,9 +3,7 @@ pandas
 numpy
 plotly
 scikit-learn
-pubchempy
-beautifulsoup4
-requests
+shap
+matplotlib
 rdkit
-biopython
-fpdf2
+pubchempy
