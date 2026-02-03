@@ -7,8 +7,6 @@ from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 import shap
 import matplotlib.pyplot as plt
-from rdkit import Chem
-from rdkit.Chem import Descriptors
 import os
 import re
 
@@ -28,7 +26,7 @@ def load_and_prep(uploaded_file=None):
         if os.path.exists(csv_path): df = pd.read_csv(csv_path)
         else: return None, None, None, None, None, None
 
-    # Database of chemical properties for reactive solubility
+    # Step 2 Property Database: K-values simulate chemical affinity for solubility
     solvent_props = {
         'Oils': {'MCT Oil': 1.4, 'Oleic Acid': 0.9, 'Capmul MCM': 1.8, 'Castor Oil': 1.1, 'Isopropyl Myristate': 1.3, 'Almond Oil': 1.0},
         'Surfactants': {'Tween 80': 15.0, 'Cremophor EL': 13.5, 'Labrasol': 12.0, 'Span 80': 4.3, 'Tween 20': 16.7},
@@ -78,21 +76,20 @@ if step_choice == "Step 1: Drug Selection":
         if method == "Search Database":
             st.session_state.drug_name = st.selectbox("Select Drug", sorted(le_dict['Drug_Name'].classes_) if le_dict else ["Abacavir"])
         elif method == "SMILES":
-            smiles = st.text_input("Enter SMILES", "CC(=O)OC1=CC=CC=C1C(=O)O")
+            st.text_input("Enter SMILES", "CC(=O)OC1=CC=CC=C1C(=O)O")
         else:
             up = st.file_uploader("Choose CSV", type="csv")
             if up: st.session_state.csv_data = up; st.rerun()
 
     with col_chart:
         st.subheader("Compatibility Score (%)")
-        # Color-coded sourcing logic
-        o_names = ['MCT Oil', 'Oleic Acid', 'Capmul MCM', 'Castor Oil', 'Isopropyl Myristate']
-        s_names = ['Tween 80', 'Cremophor EL', 'Labrasol', 'Span 80', 'Tween 20']
-        c_names = ['PEG 400', 'Ethanol', 'Propylene Glycol', 'Transcutol P', 'Glycerol']
+        o_names = list(solvent_props['Oils'].keys())[:5]
+        s_names = list(solvent_props['Surfactants'].keys())[:5]
+        c_names = list(solvent_props['Co-Surfactants'].keys())[:5]
         
         comp_df = pd.DataFrame({
             "Component": o_names + s_names + c_names,
-            "Affinity": [85, 92, 98, 91, 84, 70, 78, 85, 92, 99, 66, 74, 80, 88, 95],
+            "Affinity": [92, 88, 95, 84, 80, 75, 82, 90, 88, 94, 70, 75, 85, 89, 92],
             "Type": ["Oil"]*5 + ["Surfactant"]*5 + ["Co-Surfactant"]*5
         })
         
@@ -111,40 +108,41 @@ elif step_choice == "Step 2: Reactive Solubility":
     
     with c2:
         st.subheader("Predicted Solubility in Selected Media")
+        # Reactive Math: Logic depends on the specific solvent selection properties
         oil_val = 0.32 * solvent_props['Oils'][st.session_state.sel_oil]
         surf_val = 2.50 * (solvent_props['Surfactants'][st.session_state.sel_surf] / 13.5)
-        cosurf_val = 1.40 * solvent_props['Co-Surfactants'][st.session_state.sel_cosurf]
+        cos_val = 1.40 * solvent_props['Co-Surfactants'][st.session_state.sel_cosurf]
         
         st.metric(f"Solubility in {st.session_state.sel_oil}", f"{oil_val:.2f} mg/mL")
         st.metric(f"Solubility in {st.session_state.sel_surf}", f"{surf_val:.4f} mg/L")
-        st.metric(f"Solubility in {st.session_state.sel_cosurf}", f"{cosurf_val:.4f} mg/L")
+        st.metric(f"Solubility in {st.session_state.sel_cosurf}", f"{cos_val:.4f} mg/L")
 
 # --- STEP 3: TERNARY ---
 elif step_choice == "Step 3: Ternary Mapping":
     st.header("Step 3: Ratio Optimization & Ternary Diagram")
     c1, c2 = st.columns([1, 2])
     with c1:
-        st.session_state.smix_p = st.slider("S-mix %", 10, 70, 30)
+        st.session_state.smix_p = st.slider("S-mix % (Surfactant + Co-S)", 10, 70, 30)
         st.session_state.oil_p = st.slider("Oil %", 5, 50, 15)
-        st.session_state.km_ratio = st.select_slider("Km (S:CoS)", options=["1:1", "2:1", "3:1", "4:1"], value="2:1")
+        st.session_state.km_ratio = st.select_slider("Surfactant : Co-Surfactant Ratio (Km)", options=["1:1", "2:1", "3:1", "4:1"], value="2:1")
         water_p = 100 - st.session_state.smix_p - st.session_state.oil_p
         st.info(f"Water Phase Calculated: {water_p}%")
 
     with c2:
-                km_val = int(st.session_state.km_ratio.split(":")[0])
-        # Boundaries
+        # Fixed Indentation for Ternary boundaries
         t_oil = [0, 5, 10, 20, 0]
         t_smix = [30, 25, 20, 15, 30]
         t_water = [100-x-y for x,y in zip(t_oil, t_smix)]
         
-        fig = go.Figure(go.Scatterternary({'mode': 'lines', 'a': t_oil, 'b': t_smix, 'c': t_water, 'fill': 'toself', 'name': 'Nanoemulsion Region'}))
-        fig.add_trace(go.Scatterternary({'mode': 'markers', 'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [water_p], 'marker': {'size': 15, 'color': 'red'}}))
+        fig = go.Figure(go.Scatterternary({'mode': 'lines', 'a': t_oil, 'b': t_smix, 'c': t_water, 'fill': 'toself', 'name': 'Nanoemulsion Region', 'fillcolor': 'rgba(40, 167, 69, 0.2)'}))
+        fig.add_trace(go.Scatterternary({'mode': 'markers', 'a': [st.session_state.oil_p], 'b': [st.session_state.smix_p], 'c': [water_p], 'marker': {'size': 18, 'color': 'red', 'symbol': 'diamond'}, 'name': 'Selected Formulation'}))
         st.plotly_chart(fig, use_container_width=True)
 
 # --- STEP 4: INTERPRETATION ---
 elif step_choice == "Step 4: AI Interpretation":
-    st.header("Step 4: Multi-Parametric Prediction & Interpretation")
+    st.header("Step 4: Multi-Parametric Prediction & AI Interpretability")
     
+    # Correcting variable mapping to avoid NameError
     input_df = pd.DataFrame([{
         'Drug_Name_enc': get_enc(le_dict['Drug_Name'], st.session_state.get('drug_name', 'Abacavir')),
         'Oil_phase_enc': get_enc(le_dict['Oil_phase'], st.session_state.get('sel_oil', 'MCT Oil')),
@@ -161,9 +159,9 @@ elif step_choice == "Step 4: AI Interpretation":
     m4.metric("% EE", f"{res['Encapsulation_Efficiency']:.2f}%")
     
     is_stable = stab_model.predict(input_df)[0]
-    st.markdown(f'<div style="background-color: {"#d4edda" if is_stable else "#f8d7da"}; padding: 20px; border-radius: 10px; text-align: center;">STATUS: {"STABLE" if is_stable else "UNSTABLE"}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="background-color: {"#d4edda" if is_stable else "#f8d7da"}; padding: 20px; border-radius: 10px; text-align: center; font-weight: bold;">STATUS: {"STABLE" if is_stable else "UNSTABLE"}</div>', unsafe_allow_html=True)
 
-    st.subheader("💡 SHAP Decision Logic Interpretation")
+    st.subheader("💡 AI Decision Interpretation")
     explainer = shap.Explainer(models['Size_nm'], X_train)
     shap_v = explainer(input_df)
     
@@ -171,6 +169,6 @@ elif step_choice == "Step 4: AI Interpretation":
     shap.plots.waterfall(shap_v[0], show=False)
     st.pyplot(fig_s)
     
-    # Custom Interpretation Sentence
-    highest_impact_feat = X_train.columns[np.argmax(np.abs(shap_v.values[0]))].replace('_enc', '')
-    st.write(f"**AI Insight:** Your droplet size of {res['Size_nm']:.2f} nm is primarily driven by your choice of **{highest_impact_feat}**. To reduce the size further, you should investigate alternative ingredients in that specific category.")
+    # Custom, specific interpretation sentence
+    top_feat = X_train.columns[np.argmax(np.abs(shap_v.values[0]))].replace('_enc', '')
+    st.info(f"**Interpretation:** The AI model indicates that your predicted droplet size is most heavily influenced by your choice of **{top_feat}**. Adjusting this component will have the most significant impact on reaching your target formulation specifications.")
