@@ -172,47 +172,67 @@ if df is not None:
             st.rerun()
 
     # --- STEP 4: AI PREDICTION & TECHNICAL SHAP ---
-    elif nav == "Step 4: AI Prediction":
-        st.header("4. Batch Estimation & Interpretability")
-        try:
-            if 'f_o' not in st.session_state:
-                st.warning("⚠️ Component data missing. Please complete Step 2.")
-            else:
-                input_df = pd.DataFrame([{
-                    'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
-                    'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
-                    'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
-                    'Co-surfactant': encoders['Co-surfactant'].transform([st.session_state.f_cs])[0]
-                }])
-                
-                res = {t: models[t].predict(input_df)[0] for t in models}
-                
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Size", f"{res['Size_nm']:.2f} nm")
-                m2.metric("PDI", f"{res['PDI']:.3f}")
-                m3.metric("Zeta", f"{res['Zeta_mV']:.2f} mV")
-                m4.metric("EE %", f"{res['EE_percent']:.2f}%")
-                
-                status = "STABLE" if abs(res['Zeta_mV']) > 15 else "UNSTABLE"
-                st.markdown(f"<div style='background-color:{'#d4edda' if status=='STABLE' else '#f8d7da'}; padding:20px; border-radius:10px; text-align:center;'><b>STATUS: {status}</b></div>", unsafe_allow_html=True)
-                
-                st.divider()
-                st.subheader("AI Decision Logic (SHAP Interpretation)")
-                
-                explainer = shap.Explainer(models['Size_nm'], X_train)
-                sv = explainer(input_df)
-                fig_sh, ax = plt.subplots(); shap.plots.waterfall(sv[0], show=False); st.pyplot(fig_sh)
+    if nav == "Step 4: AI Prediction":
+    st.header("4. Batch Estimation & SHAP Analysis")
+    
+    try:
+        # Check if Step 1 & 2 selections exist in session state
+        if 'f_o' not in st.session_state or 'drug' not in st.session_state:
+            st.warning("⚠️ Please complete Step 1 and Step 2 to select your components.")
+        else:
+            # Prepare input data for the model
+            input_dict = {
+                'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
+                'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
+                'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
+                'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
+            }
+            input_df = pd.DataFrame([input_dict])
+            
+            # Predict core 4 parameters
+            res = {t: models[t].predict(input_df)[0] for t in models}
+            
+            # Calculate 2 additional derived parameters for a total of 6
+            # 5. Stability Score (Derived from Zeta and PDI)
+            stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
+            # 6. Predicted Drug Loading (Derived from EE and Size)
+            drug_loading = (res['EE_percent'] / 100) * (500 / res['Size_nm']) 
 
-                st.info("""
-                **Technical Explanation of SHAP Waterfall Plot:**
-                1. **Base Value ($E[f(X)]$):** The expected average output of the model (droplet size) given the training background.
-                2. **Feature Contribution:** Each row shows how much a specific component (Drug, Oil, etc.) shifted the prediction away from the base value.
-                3. **Red (Positive Values):** Indicates the component increased the droplet size prediction.
-                4. **Blue (Negative Values):** Indicates the component decreased the droplet size prediction, effectively aiding in 'nanonization'.
-                5. **$f(x)$:** The final output on the top of the chart is the actual predicted value for your current selection.
-                """)
-                
-        except Exception as e:
-            st.error(f"Prediction Error: {e}")
+            # Display 6 Metrics
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Size", f"{res['Size_nm']:.2f} nm")
+            col_a.metric("EE % (Encapsulation)", f"{res['EE_percent']:.2f}%")
+            
+            col_b.metric("PDI", f"{res['PDI']:.3f}")
+            col_b.metric("Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
+            
+            col_c.metric("Zeta Potential", f"{res['Zeta_mV']:.2f} mV")
+            col_c.metric("Pred. Drug Loading", f"{drug_loading:.2f} mg/mL")
+
+            st.divider()
+
+            # --- SHAP Interpretation ---
+            st.subheader("AI Decision Logic (SHAP Waterfall)")
+            # Using Size_nm model for the explanation as it is the primary physical indicator
+            explainer = shap.Explainer(models['Size_nm'], X_train)
+            shap_values = explainer(input_df)
+            
+            fig_sh, ax = plt.subplots(figsize=(10, 5))
+            shap.plots.waterfall(shap_values[0], show=False)
+            st.pyplot(fig_sh)
+
+            st.info("""
+            **Technical SHAP Interpretation:**
+            * **Base Value ($E[f(X)]$):** The average predicted particle size across the entire research database.
+            * **$f(x)$:** The final predicted size for your specific formulation.
+            * **Red Bars (Positive SHAP):** Components that are mathematically increasing the droplet size (e.g., bulky oil phases or low surfactant HLB).
+            * **Blue Bars (Negative SHAP):** Components that are actively reducing droplet size, contributing to a more stable nanoemulsion.
+            * **Magnitude:** The width of the bar indicates the 'weight' of that specific chemical component on the final physical outcome.
+            """)
+
+    except Exception as e:
+        st.error(f"Prediction Error: {str(e)}")
+        st.info("Check if 'nanoemulsion 2.csv' contains 'EE_percent' and all required columns.")
+
 else:
-    st.error("Please ensure 'nanoemulsion 2.csv' is uploaded.")
+    st.info("Please use the Sidebar to navigate through the research steps.")
