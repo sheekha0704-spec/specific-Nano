@@ -233,4 +233,4 @@ else:
             st.info("Check if 'nanoemulsion 2.csv' contains 'EE_percent' and all required columns.")
 
 else:
-    st.info("Please use the Sidebar to navigate through the research steps.")
+            st.info("Please use the Sidebar to navigate through the research steps.")
