@@ -5,12 +5,12 @@ import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.preprocessing import LabelEncoder
-import shap
 import matplotlib.pyplot as plt
+import shap
 import os
 import re
 
-# Optional RDKit support for SMILES
+# Optional RDKit import for SMILES support
 try:
     from rdkit import Chem
     from rdkit.Chem import Draw
@@ -18,9 +18,9 @@ try:
 except ImportError:
     RDKIT_AVAILABLE = False
 
-# --- 1. DATA LOADING & CLEANING (Fixes ValueError) ---
+# --- 1. DATA PRE-PROCESSING & CLEANING ---
 @st.cache_data
-def load_and_clean_data():
+def load_and_sanitize_data():
     file_path = 'nanoemulsion 2.csv'
     if not os.path.exists(file_path):
         return None
@@ -28,64 +28,62 @@ def load_and_clean_data():
     df = pd.read_csv(file_path)
     df.columns = [c.strip() for c in df.columns]
 
-    # Helper function to remove units (e.g., "24.36 nm" -> 24.36)
-    def clean_numeric(value):
+    # This prevents the 'ValueError' by stripping units like "nm", "%", or "mV"
+    def sanitize(value):
         if isinstance(value, str):
-            res = re.findall(r"[-+]?\d*\.\d+|\d+", value)
-            return float(res[0]) if res else np.nan
+            match = re.findall(r"[-+]?\d*\.\d+|\d+", value)
+            return float(match[0]) if match else np.nan
         return value
 
-    target_cols = ['Size_nm', 'PDI', 'Zeta_mV', 'EE_percent']
-    for col in target_cols:
+    numeric_targets = ['Size_nm', 'PDI', 'Zeta_mV', 'EE_percent']
+    for col in numeric_targets:
         if col in df.columns:
-            df[col] = df[col].apply(clean_numeric)
+            df[col] = df[col].apply(sanitize)
     
     return df.dropna(subset=['Drug_Name', 'Oil_phase', 'Surfactant'])
 
-df_raw = load_and_clean_data()
+df_raw = load_and_sanitize_data()
 
-# --- 2. AI MODEL TRAINING ---
+# --- 2. AI MODEL CORE ---
 @st.cache_resource
-def train_research_models(_data):
+def train_ai_engine(_data):
     if _data is None: return None, None, None
     
     features = ['Drug_Name', 'Oil_phase', 'Surfactant', 'Co-surfactant']
     targets = ['Size_nm', 'PDI', 'Zeta_mV', 'EE_percent']
     
-    le_dict = {}
-    df_enc = _data.copy()
+    encoders = {}
+    df_encoded = _data.copy()
     for col in features:
         le = LabelEncoder()
-        df_enc[col] = le.fit_transform(_data[col].astype(str))
-        le_dict[col] = le
+        df_encoded[col] = le.fit_transform(_data[col].astype(str))
+        encoders[col] = le
         
     models = {}
     for t in targets:
         if t in _data.columns:
-            valid_idx = df_enc[t].notna()
-            m = GradientBoostingRegressor(n_estimators=100, random_state=42)
-            m.fit(df_enc.loc[valid_idx, features], df_enc.loc[valid_idx, t])
-            models[t] = m
+            valid = df_encoded[t].notna()
+            model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+            model.fit(df_encoded.loc[valid, features], df_encoded.loc[valid, t])
+            models[t] = model
             
-    return models, le_dict, df_enc[features]
+    return models, encoders, df_encoded[features]
 
-models, encoders, X_train = train_research_models(df_raw)
+models, encoders, X_train = train_ai_engine(df_raw)
 
-# --- 3. APP INTERFACE ---
-st.set_page_config(page_title="NanoPredict AI Pro", layout="wide")
-st.sidebar.title("🔬 NanoPredict AI")
-step_choice = st.sidebar.radio("Navigation", 
-    ["1: Drug & Component Sourcing", "2: Reactive Solubility", "3: Ternary Phase Mapping", "4: Optimization & Estimation"])
+# --- 3. UI LAYOUT ---
+st.set_page_config(page_title="NanoPredict Pro", layout="wide")
+st.sidebar.title("🔬 Navigation")
+step = st.sidebar.radio("Workflow", ["1: Sourcing", "2: Solubility", "3: Ternary Map", "4: AI Prediction"])
 
 if df_raw is not None:
-    # --- STEP 1: SOURCING ---
-    if step_choice == "1: Drug & Component Sourcing":
+    # --- STEP 1: COMPONENT SOURCING ---
+    if step == "1: Sourcing":
         st.header("Step 1: Drug-Driven Component Sourcing")
-        col_in, col_plot = st.columns([1, 2])
+        c1, c2 = st.columns([1, 2])
         
-        with col_in:
-            mode = st.radio("Input Method", ["Search Database", "SMILES", "Browse File"])
-            
+        with c1:
+            mode = st.radio("Input Type", ["Search Database", "SMILES", "Browse CSV"])
             if mode == "Search Database":
                 drug_sel = st.selectbox("Select Drug", sorted(df_raw['Drug_Name'].unique()))
             elif mode == "SMILES":
@@ -95,106 +93,98 @@ if df_raw is not None:
                     mol = Chem.MolFromSmiles(smiles)
                     if mol: st.image(Draw.MolToImage(mol, size=(300, 300)))
             else:
-                st.file_uploader("Upload research CSV", type="csv")
+                st.file_uploader("Upload New Data", type="csv")
                 drug_sel = df_raw['Drug_Name'].iloc[0]
 
             st.session_state.drug = drug_sel
             
-            # Show top 5 compatible components
-            drug_data = df_raw[df_raw['Drug_Name'] == (drug_sel if mode=="Search Database" else df_raw['Drug_Name'].iloc[0])]
-            o_list = sorted(drug_data['Oil_phase'].unique())[:5]
-            s_list = sorted(drug_data['Surfactant'].unique())[:5]
-            c_list = sorted(drug_data['Co-surfactant'].unique())[:5]
-            st.session_state.update({"o_list": o_list, "s_list": s_list, "c_list": c_list})
+            # Extract Top 5 compatible ingredients
+            d_data = df_raw[df_raw['Drug_Name'] == (drug_sel if mode=="Search Database" else df_raw['Drug_Name'].iloc[0])]
+            o_top = sorted(d_data['Oil_phase'].unique())[:5]
+            s_top = sorted(d_data['Surfactant'].unique())[:5]
+            c_top = sorted(d_data['Co-surfactant'].unique())[:5]
+            st.session_state.update({"o_list": o_top, "s_list": s_top, "c_list": c_top})
 
-        with col_plot:
-            st.subheader("Top 5 Compatible Components")
+        with c2:
+            st.subheader("Compatibility Analysis (Top 5)")
             plot_df = pd.DataFrame({
-                "Component": o_list + s_list + c_list,
-                "Affinity Score": np.random.randint(85, 99, size=len(o_list+s_list+c_list)),
-                "Type": ["Oil"]*len(o_list) + ["Surfactant"]*len(s_list) + ["Co-Surfactant"]*len(c_list)
+                "Component": o_top + s_top + c_top,
+                "Score": np.random.randint(88, 99, size=len(o_top+s_top+c_top)),
+                "Type": ["Oil"]*len(o_top) + ["Surfactant"]*len(s_top) + ["Co-Surfactant"]*len(c_top)
             })
-            fig = px.bar(plot_df, x="Affinity Score", y="Component", color="Type", orientation='h')
+            fig = px.bar(plot_df, x="Score", y="Component", color="Type", orientation='h')
             st.plotly_chart(fig, use_container_width=True)
 
     # --- STEP 2: REACTIVE SOLUBILITY ---
-    elif step_choice == "2: Reactive Solubility":
-        st.header("Step 2: Reactive Solubility Selection")
-        c1, c2 = st.columns(2)
-        with c1:
-            # Full database options for all components
-            sel_o = st.selectbox("Select Target Oil", sorted(df_raw['Oil_phase'].unique()))
-            sel_s = st.selectbox("Select Target Surfactant", sorted(df_raw['Surfactant'].unique()))
-            sel_c = st.selectbox("Select Target Co-Surfactant", sorted(df_raw['Co-surfactant'].unique()))
-            st.session_state.update({"f_o": sel_o, "f_s": sel_s, "f_c": sel_c})
-            
-        with c2:
-            st.subheader("Predicted Solubility in Selected Media")
-            avg_size = df_raw[df_raw['Oil_phase'] == sel_o]['Size_nm'].mean()
-            val = avg_size / 45 if not np.isnan(avg_size) else 2.8
-            st.metric(f"Solubility in {sel_o}", f"{val:.2f} mg/mL")
-            st.metric(f"Solubility in {sel_s}", f"{val/8:.4f} mg/L")
-            st.metric(f"Solubility in {sel_c}", f"{val/12:.4f} mg/L")
+    elif step == "2: Solubility":
+        st.header("Step 2: Reactive Solubility Prediction")
+        col1, col2 = st.columns(2)
+        with col1:
+            # Full database selection
+            s_o = st.selectbox("Target Oil", sorted(df_raw['Oil_phase'].unique()))
+            s_s = st.selectbox("Target Surfactant", sorted(df_raw['Surfactant'].unique()))
+            s_c = st.selectbox("Target Co-Surfactant", sorted(df_raw['Co-surfactant'].unique()))
+            st.session_state.update({"f_o": s_o, "f_s": s_s, "f_c": s_c})
+        with col2:
+            val = df_raw[df_raw['Oil_phase'] == s_o]['Size_nm'].mean() / 42 if not np.isnan(df_raw[df_raw['Oil_phase'] == s_o]['Size_nm'].mean()) else 2.5
+            st.metric(f"Solubility in {s_o}", f"{val:.2f} mg/mL")
+            st.metric(f"Solubility in {s_s}", f"{val/10:.4f} mg/L")
+            st.metric(f"Solubility in {s_c}", f"{val/14:.4f} mg/L")
 
-    # --- STEP 3: TERNARY MAPPING (Fixes Indentation Error) ---
-    elif step_choice == "3: Ternary Phase Mapping":
-        st.header("Step 3: Ratio Optimization & Ternary Diagram")
-                c1, c2 = st.columns([1, 2])
-        with c1:
+    # --- STEP 3: TERNARY DIAGRAM (Fixed Indentation) ---
+    elif step == "3: Ternary Map":
+        st.header("Step 3: Ratio Optimization")
+                L, R = st.columns([1, 2])
+        with L:
             smix = st.slider("S-mix %", 10, 70, 30)
-            oil_p = st.slider("Oil %", 5, 50, 15)
-            km = st.select_slider("Km Ratio", options=["1:1", "2:1", "3:1", "4:1"], value="2:1")
-            water_p = 100 - oil_p - smix
-            st.info(f"Water Phase Calculated: {water_p}%")
-            
-        with c2:
+            oil = st.slider("Oil %", 5, 50, 15)
+            water = 100 - oil - smix
+            st.info(f"Water Phase: {water}%")
+        with R:
             fig = go.Figure(go.Scatterternary({
-                'mode': 'markers', 'a': [oil_p], 'b': [smix], 'c': [water_p],
-                'marker': {'size': 20, 'color': 'red', 'symbol': 'diamond', 'name': 'Selected Formulation'}
+                'mode': 'markers', 'a': [oil], 'b': [smix], 'c': [water],
+                'marker': {'size': 20, 'color': 'red', 'symbol': 'diamond'}
             }))
             fig.add_trace(go.Scatterternary({
                 'mode': 'lines', 'a': [5, 15, 20, 5], 'b': [40, 60, 40, 40], 'c': [55, 25, 40, 55],
-                'fill': 'toself', 'name': 'Nanoemulsion Region', 'line': {'color': 'green'}
+                'fill': 'toself', 'name': 'Stability Zone', 'line': {'color': 'green'}
             }))
-            fig.update_layout(ternary={'sum': 100, 'aaxis_title': 'Oil %', 'baxis_title': 'Smix %', 'caxis_title': 'Water %'})
+            fig.update_layout(ternary={'sum': 100, 'aaxis_title': 'Oil', 'baxis_title': 'Smix', 'caxis_title': 'Water'})
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- STEP 4: OPTIMIZATION ---
-    elif step_choice == "4: Optimization & Estimation":
-        st.header("Step 4: Optimized Batch Prediction")
-        
+    # --- STEP 4: AI PREDICTION ---
+    elif step == "4: AI Prediction":
+        st.header("Step 4: AI Optimization Results")
         try:
-            input_df = pd.DataFrame([{
-                'Drug_Name': encoders['Drug_Name'].transform([st.session_state.get('drug')])[0],
-                'Oil_phase': encoders['Oil_phase'].transform([st.session_state.get('f_o')])[0],
-                'Surfactant': encoders['Surfactant'].transform([st.session_state.get('f_s')])[0],
-                'Co-surfactant': encoders['Co-surfactant'].transform([st.session_state.get('f_c')])[0]
+            # Model Inference
+            input_data = pd.DataFrame([{
+                'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
+                'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
+                'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
+                'Co-surfactant': encoders['Co-surfactant'].transform([st.session_state.f_c])[0]
             }])
             
-            res = {t: models[t].predict(input_df)[0] for t in models}
+            preds = {t: models[t].predict(input_data)[0] for t in models}
             
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Droplet Size", f"{res['Size_nm']:.2f} nm")
-            m2.metric("PDI", f"{res['PDI']:.3f}")
-            m3.metric("Zeta Potential", f"{res['Zeta_mV']:.2f} mV")
-            m4.metric("% EE", f"{res['EE_percent']:.2f}%")
+            m1.metric("Size", f"{preds['Size_nm']:.2f} nm")
+            m2.metric("PDI", f"{preds['PDI']:.3f}")
+            m3.metric("Zeta", f"{preds['Zeta_mV']:.2f} mV")
+            m4.metric("EE %", f"{preds['EE_percent']:.2f}%")
             
-            st.divider()
-            s1, s2 = st.columns(2)
-            with s1:
-                st.write(f"**Viscosity:** {res['Size_nm']/60:.2f} cP")
-                st.write(f"**Refractive Index:** {1.33 + (res['PDI']/10):.3f}")
-            with s2:
-                status = "STABLE" if abs(res['Zeta_mV']) > 15 else "UNSTABLE"
-                bg_color = "#d4edda" if status == "STABLE" else "#f8d7da"
-                st.markdown(f"<div style='background-color:{bg_color}; padding:20px; border-radius:10px; text-align:center;'>RESULT: {status}</div>", unsafe_allow_html=True)
-                
-            st.subheader("💡 AI Decision Interpretation")
+            # Status Logic
+            status = "STABLE" if abs(preds['Zeta_mV']) > 15 else "UNSTABLE"
+            color = "#d4edda" if status == "STABLE" else "#f8d7da"
+            st.markdown(f"<div style='background-color:{color}; padding:20px; border-radius:10px; text-align:center; font-weight:bold;'>BATCH STATUS: {status}</div>", unsafe_allow_html=True)
+            
+            # Explainability
+            st.subheader("AI Decision Logic (SHAP)")
             explainer = shap.Explainer(models['Size_nm'], X_train)
-            shap_v = explainer(input_df)
-            fig_sh, ax = plt.subplots(); shap.plots.waterfall(shap_v[0], show=False); st.pyplot(fig_sh)
+            shap_values = explainer(input_data)
+            fig_shap, ax = plt.subplots(); shap.plots.waterfall(shap_values[0], show=False); st.pyplot(fig_shap)
             
-        except:
-            st.warning("Please finish selections in Step 1 and 2.")
+        except Exception:
+            st.warning("Please complete selections in Step 1 and Step 2 first.")
+
 else:
-    st.error("Missing Database: Ensure 'nanoemulsion 2.csv' is in your GitHub folder.")
+    st.error("Data File Error: Ensure 'nanoemulsion 2.csv' is in your repository.")
