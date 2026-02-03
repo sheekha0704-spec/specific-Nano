@@ -112,7 +112,7 @@ if df is not None:
             # Shows ALL oils and surfactants from the entire database
             sel_o = st.selectbox("Oil Phase", sorted(df['Oil_phase'].unique()))
             sel_s = st.selectbox("Surfactant", sorted(df['Surfactant'].unique()))
-            sel_cs = st.selectbox("Co-Surfactant", sorted(df['Co-surfactant'].unique()))
+            sel_cs = st.selectbox("Co-Surfactant", sorted(df['Co-surfactant'].dropna().astype(str).unique()))
             st.session_state.update({"f_o": sel_o, "f_s": sel_s, "f_cs": sel_cs})
         with col2:
             st.subheader("Predicted Solubility")
