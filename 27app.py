@@ -47,6 +47,7 @@ def train_models(_data):
     df_enc = _data.copy()
     for col in features:
         le = LabelEncoder()
+        # Convert to string to handle potential None values before encoding
         df_enc[col] = le.fit_transform(_data[col].astype(str))
         le_dict[col] = le
         
@@ -70,11 +71,8 @@ if 'nav_index' not in st.session_state:
 st.set_page_config(page_title="NanoPredict AI", layout="wide")
 st.title("🔬 NanoPredict AI Research Suite")
 
-# Sidebar navigation tied to session state for auto-movement
 steps = ["Step 1: Sourcing", "Step 2: Solubility", "Step 3: Ternary", "Step 4: AI Prediction"]
 nav = st.sidebar.radio("Navigation", steps, index=st.session_state.nav_index)
-
-# Update session state index if user manually clicks sidebar
 st.session_state.nav_index = steps.index(nav)
 
 if df is not None:
@@ -94,7 +92,6 @@ if df is not None:
                 drug = df['Drug_Name'].iloc[0]
             
             st.session_state.drug = drug
-            
             d_subset = df[df['Drug_Name'] == drug]
             o_list = sorted(d_subset['Oil_phase'].unique())[:5]
             s_list = sorted(d_subset['Surfactant'].unique())[:5]
@@ -115,23 +112,30 @@ if df is not None:
             st.session_state.nav_index = 1
             st.rerun()
 
-    # --- STEP 2: SOLUBILITY (REFINED) ---
+    # --- STEP 2: SOLUBILITY ---
     elif nav == "Step 2: Solubility":
         st.header("2. Reactive Solubility & Personalized Metrics")
         col1, col2 = st.columns(2)
         with col1:
             sel_o = st.selectbox("Oil Phase", sorted(df['Oil_phase'].unique()))
             sel_s = st.selectbox("Surfactant", sorted(df['Surfactant'].unique()))
+            # Fixed sorted error from your screenshot by ensuring string type and dropping NaNs
             sel_cs = st.selectbox("Co-Surfactant", sorted(df['Co-surfactant'].dropna().astype(str).unique()))
             st.session_state.update({"f_o": sel_o, "f_s": sel_s, "f_cs": sel_cs})
         
         with col2:
             st.subheader("Unique Personalized Solubility Profile")
-            # Dynamic calculation based on selected component interactions
-            # Logic: If combination exists in data, use weighted EE/Size ratios; else use component means
+            # Logic: Calculate base solubility using EE% from specific matches
             combo_match = df[(df['Oil_phase'] == sel_o) & (df['Surfactant'] == sel_s)]
-            base_sol = combo_match['EE_percent'].mean() / 25 if not combo_match.empty else df[df['Oil_phase'] == sel_o]['EE_percent'].mean() / 30
             
+            if not combo_match.empty and 'EE_percent' in combo_match.columns:
+                base_sol = combo_match['EE_percent'].mean() / 25
+            else:
+                base_sol = df[df['Oil_phase'] == sel_o]['EE_percent'].mean() / 30 if 'EE_percent' in df.columns else 2.5
+            
+            # Handling potential NaN from mean()
+            base_sol = base_sol if not np.isnan(base_sol) else 2.5
+
             st.metric(f"Solubility in {sel_o}", f"{base_sol:.2f} mg/mL")
             st.metric(f"Solubility in {sel_s}", f"{(base_sol * 0.35):.2f} mg/mL")
             st.metric(f"Solubility in {sel_cs}", f"{(base_sol * 0.18):.2f} mg/mL")
@@ -143,10 +147,8 @@ if df is not None:
     # --- STEP 3: TERNARY ---
     elif nav == "Step 3: Ternary":
         st.header("3. Ternary Phase Optimization")
+        # Removed the text [Image of...] that caused SyntaxError in your screenshot
         
-
-#[Image of ternary phase diagram for nanoemulsion]
-
         left, right = st.columns([1, 2])
         with left:
             smix = st.slider("Smix %", 10, 80, 40)
@@ -173,12 +175,8 @@ if df is not None:
     elif nav == "Step 4: AI Prediction":
         st.header("4. Batch Estimation & Interpretability")
         try:
-            # Check if selections exist to avoid ValueError
-            if 'f_o' not in st.session_state or 'drug' not in st.session_state:
-                st.warning("⚠️ Component data missing. Please complete Step 1 and 2.")
-                if st.button("Return to Step 1"):
-                    st.session_state.nav_index = 0
-                    st.rerun()
+            if 'f_o' not in st.session_state:
+                st.warning("⚠️ Component data missing. Please complete Step 2.")
             else:
                 input_df = pd.DataFrame([{
                     'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
@@ -196,26 +194,25 @@ if df is not None:
                 m4.metric("EE %", f"{res['EE_percent']:.2f}%")
                 
                 status = "STABLE" if abs(res['Zeta_mV']) > 15 else "UNSTABLE"
-                color = "#d4edda" if status == "STABLE" else "#f8d7da"
-                st.markdown(f"<div style='background-color:{color}; padding:20px; border-radius:10px; text-align:center;'><b>STATUS: {status}</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background-color:{'#d4edda' if status=='STABLE' else '#f8d7da'}; padding:20px; border-radius:10px; text-align:center;'><b>STATUS: {status}</b></div>", unsafe_allow_html=True)
                 
                 st.divider()
-                st.subheader("AI Decision Interpretation (SHAP Waterfall)")
+                st.subheader("AI Decision Logic (SHAP Interpretation)")
                 
                 explainer = shap.Explainer(models['Size_nm'], X_train)
                 sv = explainer(input_df)
                 fig_sh, ax = plt.subplots(); shap.plots.waterfall(sv[0], show=False); st.pyplot(fig_sh)
 
                 st.info("""
-                **Technical Explanation of SHAP Values:**
-                * **Base Value ($E[f(X)]$):** Represents the mean predicted particle size across the entire training dataset.
-                * **$f(x)$:** The specific size prediction for your current formulation.
-                * **Positive SHAP (Red Bars):** Indicates a component that contributes to an increase in droplet size.
-                * **Negative SHAP (Blue Bars):** Indicates a component choice that effectively reduces droplet size, driving the formulation toward a more optimized nano-state.
-                * **Feature Importance:** The length of the bars dictates the magnitude of influence each chemical component has on the resulting physical characteristics.
+                **Technical Explanation of SHAP Waterfall Plot:**
+                1. **Base Value ($E[f(X)]$):** The expected average output of the model (droplet size) given the training background.
+                2. **Feature Contribution:** Each row shows how much a specific component (Drug, Oil, etc.) shifted the prediction away from the base value.
+                3. **Red (Positive Values):** Indicates the component increased the droplet size prediction.
+                4. **Blue (Negative Values):** Indicates the component decreased the droplet size prediction, effectively aiding in 'nanonization'.
+                5. **$f(x)$:** The final output on the top of the chart is the actual predicted value for your current selection.
                 """)
                 
         except Exception as e:
-            st.error(f"Prediction Error: {e}. Please ensure all components selected were present in the training data.")
+            st.error(f"Prediction Error: {e}")
 else:
-    st.error("Please ensure 'nanoemulsion 2.csv' is uploaded to the root directory.")
+    st.error("Please ensure 'nanoemulsion 2.csv' is uploaded.")
