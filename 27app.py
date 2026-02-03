@@ -173,7 +173,7 @@ if df is not None:
 
     # --- STEP 4: AI PREDICTION & TECHNICAL SHAP ---
     if nav == "Step 4: AI Prediction":
-    st.header("4. Batch Estimation & SHAP Analysis")
+       st.header("4. Batch Estimation & SHAP Analysis")
     
     try:
         # Check if Step 1 & 2 selections exist in session state
