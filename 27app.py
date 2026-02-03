@@ -228,9 +228,9 @@ elif nav == "Step 4: AI Prediction":
             st.error(f"Prediction Error: {str(e)}")
             st.write("Ensure your CSV has columns for Size, PDI, Zeta, and EE.")
 else:
-    st.error("Please ensure 'nanoemulsion 2.csv' is uploaded to the root directory.")
-        st.error(f"Prediction Error: {str(e)}")
-        st.info("Check if 'nanoemulsion 2.csv' contains 'EE_percent' and all required columns.")
+            st.error("Please ensure 'nanoemulsion 2.csv' is uploaded to the root directory.")
+            st.error(f"Prediction Error: {str(e)}")
+            st.info("Check if 'nanoemulsion 2.csv' contains 'EE_percent' and all required columns.")
 
 else:
     st.info("Please use the Sidebar to navigate through the research steps.")
