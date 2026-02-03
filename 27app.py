@@ -196,7 +196,7 @@ if df is not None:
             # 5. Stability Score (Derived from Zeta and PDI)
             stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
             # 6. Predicted Drug Loading (Derived from EE and Size)
-            drug_loading = (res['EE_percent'] / 100) * (500 / res['Size_nm']) 
+            drug_loading = (res['EE %'] / 100) * (500 / res['Size_nm']) 
 
             # Display 6 Metrics
             col_a, col_b, col_c = st.columns(3)
