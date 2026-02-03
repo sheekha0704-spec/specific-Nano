@@ -172,65 +172,63 @@ if df is not None:
             st.rerun()
 
     # --- STEP 4: AI PREDICTION & TECHNICAL SHAP ---
-    if nav == "Step 4: AI Prediction":
-       st.header("4. Batch Estimation & SHAP Analysis")
-    
-    try:
-        # Check if Step 1 & 2 selections exist in session state
-        if 'f_o' not in st.session_state or 'drug' not in st.session_state:
-            st.warning("⚠️ Please complete Step 1 and Step 2 to select your components.")
-        else:
-            # Prepare input data for the model
-            input_dict = {
-                'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
-                'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
-                'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
-                'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
-            }
-            input_df = pd.DataFrame([input_dict])
-            
-            # Predict core 4 parameters
-            res = {t: models[t].predict(input_df)[0] for t in models}
-            
-            # Calculate 2 additional derived parameters for a total of 6
-            # 5. Stability Score (Derived from Zeta and PDI)
-            stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
-            # 6. Predicted Drug Loading (Derived from EE and Size)
-            drug_loading = (res['EE %'] / 100) * (500 / res['Size_nm']) 
+elif nav == "Step 4: AI Prediction":
+        st.header("4. Batch Estimation & Interpretability")
+        
+        try:
+            # Ensure session state variables exist
+            if 'drug' not in st.session_state or 'f_o' not in st.session_state:
+                st.error("Please complete Step 1 and Step 2 first.")
+            else:
+                # Prepare prediction input
+                input_df = pd.DataFrame([{
+                    'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
+                    'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
+                    'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
+                    'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
+                }])
+                
+                # Predict standard parameters
+                res = {k: models[k].predict(input_df)[0] for k in models}
+                
+                # Calculate derived parameters for total 6
+                stability = (abs(res.get('Zeta_mV', 0)) / 30) * (1 - res.get('PDI', 0.5)) * 100
+                loading_capacity = (res.get('EE_percent', 0) / 100) * (200 / res.get('Size_nm', 1))
 
-            # Display 6 Metrics
-            col_a, col_b, col_c = st.columns(3)
-            col_a.metric("Size", f"{res['Size_nm']:.2f} nm")
-            col_a.metric("EE % (Encapsulation)", f"{res['EE_percent']:.2f}%")
-            
-            col_b.metric("PDI", f"{res['PDI']:.3f}")
-            col_b.metric("Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
-            
-            col_c.metric("Zeta Potential", f"{res['Zeta_mV']:.2f} mV")
-            col_c.metric("Pred. Drug Loading", f"{drug_loading:.2f} mg/mL")
+                # Display Metrics
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Size", f"{res.get('Size_nm', 0):.2f} nm")
+                m1.metric("EE %", f"{res.get('EE_percent', 0):.2f}%")
+                
+                m2.metric("PDI", f"{res.get('PDI', 0):.3f}")
+                m2.metric("Stability Score", f"{max(0, min(100, stability)):.1f}/100")
+                
+                m3.metric("Zeta Potential", f"{res.get('Zeta_mV', 0):.2f} mV")
+                m3.metric("Loading Capacity", f"{loading_capacity:.2f} mg/mL")
 
-            st.divider()
+                st.divider()
+                st.subheader("AI Decision Logic (SHAP Waterfall)")
+                
+                # SHAP Analysis
+                explainer = shap.Explainer(models['Size_nm'], X_train)
+                sv = explainer(input_df)
+                fig_sh, ax = plt.subplots(figsize=(10, 4))
+                shap.plots.waterfall(sv[0], show=False)
+                st.pyplot(fig_sh)
 
-            # --- SHAP Interpretation ---
-            st.subheader("AI Decision Logic (SHAP Waterfall)")
-            # Using Size_nm model for the explanation as it is the primary physical indicator
-            explainer = shap.Explainer(models['Size_nm'], X_train)
-            shap_values = explainer(input_df)
-            
-            fig_sh, ax = plt.subplots(figsize=(10, 5))
-            shap.plots.waterfall(shap_values[0], show=False)
-            st.pyplot(fig_sh)
+                st.info("""
+                **Technical Interpretation of AI Logic:**
+                * **Base Value:** The average predicted particle size across the entire database.
+                * **$f(x)$:** The final prediction for your current selection.
+                * **Red Bars:** Components that increase droplet size (driving the size away from the nano-range).
+                * **Blue Bars:** Components that decrease droplet size (optimizing the nano-formulation).
+                """)
 
-            st.info("""
-            **Technical SHAP Interpretation:**
-            * **Base Value ($E[f(X)]$):** The average predicted particle size across the entire research database.
-            * **$f(x)$:** The final predicted size for your specific formulation.
-            * **Red Bars (Positive SHAP):** Components that are mathematically increasing the droplet size (e.g., bulky oil phases or low surfactant HLB).
-            * **Blue Bars (Negative SHAP):** Components that are actively reducing droplet size, contributing to a more stable nanoemulsion.
-            * **Magnitude:** The width of the bar indicates the 'weight' of that specific chemical component on the final physical outcome.
-            """)
-
-    except Exception as e:
+        except Exception as e:
+            st.error(f"Prediction Error: {str(e)}")
+            st.write("Ensure your CSV has columns for Size, PDI, Zeta, and EE.")
+else:
+    st.error("Please ensure 'nanoemulsion 2.csv' is uploaded to the root directory.")
         st.error(f"Prediction Error: {str(e)}")
         st.info("Check if 'nanoemulsion 2.csv' contains 'EE_percent' and all required columns.")
 
