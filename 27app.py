@@ -124,7 +124,7 @@ if df is not None:
         st.header("3. Ternary Phase Optimization")
         
 
-[Image of ternary phase diagram for nanoemulsion]
+#[Image of ternary phase diagram for nanoemulsion]
 
         left, right = st.columns([1, 2])
         with left:
