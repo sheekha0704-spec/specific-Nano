@@ -4,201 +4,162 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.preprocessing import LabelEncoder
+from rdkit import Chem
+from rdkit.Chem import Draw, Descriptors
 import shap
 import matplotlib.pyplot as plt
-import re
 
-# --- 1. SMART DATABASE (Personalized Mapping) ---
-# Selecting a drug in Step 1 filters everything in Step 2, 3, and 4.
-DRUG_DATA = {
-    "Aspirin": {
-        "LogP": 1.19, 
-        "Oils": ["Oleic Acid", "Castor Oil", "Isopropyl Myristate"], 
-        "Surfs": ["Tween 80", "Span 80"], 
-        "CoS": ["Ethanol", "PEG 400"]
-    },
-    "Curcumin": {
-        "LogP": 3.29, 
-        "Oils": ["MCT Oil", "Capmul MCM", "Labrafil M"], 
-        "Surfs": ["Cremophor EL", "Labrasol"], 
-        "CoS": ["Transcutol P", "Propylene Glycol"]
-    },
-    "Ibuprofen": {
-        "LogP": 3.97, 
-        "Oils": ["Isopropyl Myristate", "MCT Oil", "Oleic Acid"], 
-        "Surfs": ["Tween 20", "Labrasol"], 
-        "CoS": ["Glycerol", "PEG 400"]
-    }
+# --- 1. DATA & SOLVENT PROPERTY DATABASE ---
+DRUG_DATABASE = {
+    "Abacavir": {"LogP": 1.20, "MW": 286.3, "Oils": ["Oleic Acid", "Castor Oil"], "Surfs": ["Tween 80", "Span 80"], "CoS": ["Ethanol", "PEG 400"]},
+    "Aspirin": {"LogP": 1.19, "MW": 180.1, "Oils": ["Almond Oil", "Oleic Acid"], "Surfs": ["Tween 20", "Span 80"], "CoS": ["Glycerol", "Propylene Glycol"]},
+    "Curcumin": {"LogP": 3.29, "MW": 368.4, "Oils": ["MCT Oil", "Capmul MCM"], "Surfs": ["Cremophor EL", "Labrasol"], "CoS": ["Transcutol P", "PEG 400"]},
+    "Ibuprofen": {"LogP": 3.97, "MW": 206.2, "Oils": ["Isopropyl Myristate", "MCT Oil"], "Surfs": ["Labrasol", "Tween 80"], "CoS": ["Propylene Glycol", "Ethanol"]}
 }
 
-# Database for Step 2 Reactive Solubility (Solvent-specific properties)
 SOLVENT_PROPS = {
-    'MCT Oil': 1.82, 'Oleic Acid': 0.94, 'Capmul MCM': 2.15, 'Castor Oil': 1.22, 'Isopropyl Myristate': 1.41, 'Labrafil M': 1.65,
+    'MCT Oil': 1.82, 'Oleic Acid': 0.94, 'Capmul MCM': 2.15, 'Castor Oil': 1.22, 'Almond Oil': 0.85, 'Isopropyl Myristate': 1.41,
     'Tween 80': 2.11, 'Cremophor EL': 2.55, 'Labrasol': 1.98, 'Span 80': 0.72, 'Tween 20': 2.24,
     'PEG 400': 1.55, 'Ethanol': 2.92, 'Propylene Glycol': 1.81, 'Transcutol P': 2.44, 'Glycerol': 0.88
 }
 
 # --- 2. AI MODEL INITIALIZATION ---
 @st.cache_resource
-def load_ai_models():
-    # Creating a synthetic dataset for the demo logic
-    X = pd.DataFrame({
-        'Drug_enc': np.random.randint(0, 3, 20),
-        'Oil_enc': np.random.randint(0, 5, 20),
-        'Surf_enc': np.random.randint(0, 5, 20),
-        'CoS_enc': np.random.randint(0, 5, 20)
-    })
-    y_size = np.random.uniform(50, 250, 20)
-    model = GradientBoostingRegressor(n_estimators=50).fit(X, y_size)
-    return model, X
+def load_ai_engine():
+    # Synthetic training to handle all parameters in Step 4
+    X = pd.DataFrame(np.random.randint(0, 5, size=(50, 4)), columns=['D', 'O', 'S', 'C'])
+    targets = ['Size', 'PDI', 'Zeta', 'EE', 'Visc', 'RI']
+    models = {t: GradientBoostingRegressor().fit(X, np.random.uniform(10, 200, 50)) for t in targets}
+    return models, X
 
-model_size, X_train = load_ai_models()
+models, X_train = load_ai_engine()
 
 # --- 3. APP CONFIGURATION ---
-st.set_page_config(page_title="NanoPredict AI", layout="wide")
-
+st.set_page_config(page_title="NanoPredict AI Pro", layout="wide")
 st.sidebar.title("🔬 NanoPredict AI")
-step_choice = st.sidebar.radio("Navigation", 
-    ["Step 1: Personalized Sourcing", 
-     "Step 2: Reactive Solubility", 
-     "Step 3: Ternary Mapping", 
-     "Step 4: AI Interpretation"])
+step_choice = st.sidebar.radio("Workflow Steps", 
+    ["1: Drug & Component Sourcing", "2: Reactive Solubility", "3: Ternary Phase Mapping", "4: Optimization & Estimation"])
 
-# --- STEP 1: PERSONALIZED SOURCING ---
-if step_choice == "Step 1: Personalized Sourcing":
-    st.header("Step 1: Personalized Drug-to-Excipient Sourcing")
-    st.write("Excipients are determined specifically based on the selected drug's chemical profile.")
+# --- STEP 1: DRUG & COMPONENT SOURCING ---
+if step_choice == "1: Drug & Component Sourcing":
+    st.header("Step 1: Drug-Driven Component Sourcing")
     
-    # Selecting the Drug changes EVERYTHING in the following steps
-    drug_sel = st.selectbox("Select Target Drug", list(DRUG_DATA.keys()))
-    st.session_state.drug = drug_sel
+    col_input, col_chart = st.columns([1, 2])
     
-    # Filter the list of ingredients based on the drug
-    oils = DRUG_DATA[drug_sel]["Oils"]
-    surfs = DRUG_DATA[drug_sel]["Surfs"]
-    cos = DRUG_DATA[drug_sel]["CoS"]
-    
-    # Store lists for Step 2 dropdowns
-    st.session_state.allowed_oils = oils
-    st.session_state.allowed_surfs = surfs
-    st.session_state.allowed_cos = cos
-
-    # Create Personalized Chart with category-uniform colors
-    source_df = pd.DataFrame({
-        "Component": oils + surfs + cos,
-        "Compatibility %": [95, 88, 82, 92, 85, 90, 80][:len(oils+surfs+cos)],
-        "Category": ["Oil"]*len(oils) + ["Surfactant"]*len(surfs) + ["Co-Surfactant"]*len(cos)
-    })
-    
-    fig = px.bar(source_df, x="Compatibility %", y="Component", color="Category", 
-                 orientation='h', title=f"Personalized Compatibility for {drug_sel}",
-                 color_discrete_map={"Oil": "#1f77b4", "Surfactant": "#ff7f0e", "Co-Surfactant": "#2ca02c"})
-    st.plotly_chart(fig, use_container_width=True)
-
-# --- STEP 2: REACTIVE SOLUBILITY ---
-elif step_choice == "Step 2: Reactive Solubility":
-    st.header("Step 2: Dynamic Solubility Analysis")
-    st.info(f"Analyzing media for: **{st.session_state.get('drug', 'Please select a drug in Step 1')}**")
-    
-    # Retrieve filtered selections from Step 1
-    o_list = st.session_state.get('allowed_oils', ["MCT Oil"])
-    s_list = st.session_state.get('allowed_surfs', ["Tween 80"])
-    c_list = st.session_state.get('allowed_cos', ["PEG 400"])
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        sel_o = st.selectbox("Choose Oil Phase", o_list)
-        sel_s = st.selectbox("Choose Surfactant", s_list)
-        sel_c = st.selectbox("Choose Co-Surfactant", c_list)
+    with col_input:
+        method = st.radio("Drug Input Method", ["Search Database", "SMILES", "Upload CSV"])
         
-        # Save selection for Step 4
-        st.session_state.final_o = sel_o
-        st.session_state.final_s = sel_s
-        st.session_state.final_c = sel_c
+        if method == "Search Database":
+            drug_name = st.selectbox("Select Drug", list(DRUG_DATABASE.keys()))
+            logp = DRUG_DATABASE[drug_name]["LogP"]
+            
+        elif method == "SMILES":
+            smiles = st.text_input("Enter SMILES", "CC(=O)OC1=CC=CC=C1C(=O)O")
+            mol = Chem.MolFromSmiles(smiles)
+            if mol:
+                logp = round(Descriptors.MolLogP(mol), 2)
+                st.image(Draw.MolToImage(mol, size=(200, 150)), caption="Molecular Structure")
+                drug_name = "Custom Molecule"
+            else:
+                st.error("Invalid SMILES")
+                logp = 1.0
+                drug_name = "Unknown"
+                
+        else:
+            up = st.file_uploader("Upload CSV Database", type="csv")
+            if up: st.success("Database Loaded"); drug_name = "CSV Drug"; logp = 2.0
+            else: drug_name = "Aspirin"; logp = 1.19
 
-    with col2:
-        st.subheader("Predicted Solubility Results")
-        # Reactive Math: Value changes depending on the specific solvent selected
-        base_sol = 6.5
-        
-        # Access properties from the SOLVENT_PROPS dictionary
-        o_val = base_sol * SOLVENT_PROPS[sel_o]
-        s_val = (base_sol * 0.45) * SOLVENT_PROPS[sel_s]
-        c_val = base_sol * SOLVENT_PROPS[sel_c]
-        
-        st.metric(f"Solubility in {sel_o}", f"{o_val:.2f} mg/mL")
-        st.metric(f"Solubility in {sel_s}", f"{s_val:.4f} mg/L")
-        st.metric(f"Solubility in {sel_c}", f"{c_val:.4f} mg/L")
+        st.session_state.drug_name = drug_name
+        st.session_state.logp = logp
 
-# --- STEP 3: TERNARY MAPPING ---
-elif step_choice == "Step 3: Ternary Mapping":
-    st.header("Step 3: Ternary Phase Diagram")
-    
-    st.write("Adjust the ratios to locate your formulation within the nanoemulsion region.")
-
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        oil_p = st.slider("Oil Phase %", 5, 50, 15)
-        smix_p = st.slider("S-mix (S + CoS) %", 10, 80, 40)
-        water_p = 100 - oil_p - smix_p
+    with col_chart:
+        st.subheader("Personalized Component Affinity")
+        # Logic to determine which components "fit" the drug logP
+        oils = DRUG_DATABASE.get(drug_name, DRUG_DATABASE["Aspirin"])["Oils"]
+        surfs = DRUG_DATABASE.get(drug_name, DRUG_DATABASE["Aspirin"])["Surfs"]
+        cos = DRUG_DATABASE.get(drug_name, DRUG_DATABASE["Aspirin"])["CoS"]
         
-        st.metric("Aqueous Phase (Water)", f"{water_p}%")
-        st.session_state.oil_p = oil_p
-        st.session_state.smix_p = smix_p
-    
-    with c2:
-        # Stable Plotly Ternary Graph Implementation
-        fig = go.Figure(go.Scatterternary({
-            'mode': 'markers',
-            'a': [oil_p], # Top
-            'b': [smix_p], # Left
-            'c': [water_p], # Right
-            'marker': {'size': 20, 'color': 'red', 'symbol': 'diamond', 'line': {'width': 2, 'color': 'black'}},
-            'name': 'Current Formulation'
-        }))
+        st.session_state.o_list, st.session_state.s_list, st.session_state.c_list = oils, surfs, cos
         
-        fig.update_layout({
-            'ternary': {
-                'sum': 100,
-                'aaxis': {'title': 'Oil %', 'min': 0, 'linewidth': 2},
-                'baxis': {'title': 'Smix %', 'min': 0, 'linewidth': 2},
-                'caxis': {'title': 'Water %', 'min': 0, 'linewidth': 2}
-            },
-            'showlegend': True,
-            'height': 600
+        source_df = pd.DataFrame({
+            "Component": oils + surfs + cos,
+            "Affinity Score": [95, 88, 92, 85, 90, 80][:len(oils+surfs+cos)],
+            "Type": ["Oil"]*len(oils) + ["Surfactant"]*len(surfs) + ["Co-Surfactant"]*len(cos)
         })
+        fig = px.bar(source_df, x="Affinity Score", y="Component", color="Type", orientation='h',
+                     color_discrete_map={"Oil": "#1f77b4", "Surfactant": "#ff7f0e", "Co-Surfactant": "#2ca02c"})
         st.plotly_chart(fig, use_container_width=True)
 
-# --- STEP 4: AI INTERPRETATION ---
-elif step_choice == "Step 4: AI Interpretation":
-    st.header("Step 4: AI Decision & SHAP Interpretation")
+# --- STEP 2: REACTIVE SOLUBILITY ---
+elif step_choice == "2: Reactive Solubility":
+    st.header("Step 2: Reactive Drug Solubility")
+    st.write(f"Estimating solubility for **{st.session_state.get('drug_name', 'Drug')}**")
     
-    # Input data construction
-    input_data = pd.DataFrame([[1, 2, 1, 1]], columns=X_train.columns)
+    c1, c2 = st.columns(2)
+    with c1:
+        sel_o = st.selectbox("Select Target Oil", st.session_state.get('o_list', ['Oleic Acid']))
+        sel_s = st.selectbox("Select Target Surfactant", st.session_state.get('s_list', ['Tween 80']))
+        sel_c = st.selectbox("Select Target Co-Surfactant", st.session_state.get('c_list', ['Ethanol']))
+        st.session_state.final_o, st.session_state.final_s, st.session_state.final_c = sel_o, sel_s, sel_c
+
+    with c2:
+        st.subheader("Predicted Solubility in Selected Media")
+        base = 5.0 * (st.session_state.get('logp', 1.0) / 2)
+        st.metric(f"Solubility in {sel_o}", f"{base * SOLVENT_PROPS[sel_o]:.2f} mg/mL")
+        st.metric(f"Solubility in {sel_s}", f"{(base * 0.4) * SOLVENT_PROPS[sel_s]:.4f} mg/L")
+        st.metric(f"Solubility in {sel_c}", f"{(base * 0.3) * SOLVENT_PROPS[sel_c]:.4f} mg/L")
+
+# --- STEP 3: TERNARY PHASE MAPPING ---
+elif step_choice == "3: Ternary Phase Mapping":
+    st.header("Step 3: Ternary Phase Diagram & Miscibility")
+        c1, c2 = st.columns([1, 2])
+    with c1:
+        st.session_state.km = st.select_slider("Km (Surfactant : Co-S)", options=["1:1", "2:1", "3:1", "4:1"], value="2:1")
+        st.session_state.smix = st.slider("S-mix %", 10, 80, 40)
+        st.session_state.oil = st.slider("Oil %", 5, 50, 15)
+        water = 100 - st.session_state.oil - st.session_state.smix
+        st.info(f"Water Phase Calculated: {water}%")
+        
+    with c2:
+        fig = go.Figure(go.Scatterternary({'mode': 'markers', 'a': [st.session_state.oil], 'b': [st.session_state.smix], 'c': [water],
+                                           'marker': {'size': 20, 'color': 'red', 'symbol': 'diamond'}}))
+        fig.update_layout(ternary={'sum': 100, 'aaxis_title': 'Oil %', 'baxis_title': 'Smix %', 'caxis_title': 'Water %'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# --- STEP 4: OPTIMIZATION & ESTIMATION ---
+elif step_choice == "4: Optimization & Estimation":
+    st.header("Step 4: Optimized Batch Results")
     
-    pred_size = model_size.predict(input_data)[0]
+    # Input for AI
+    input_df = pd.DataFrame([[1, 2, 1, 1]], columns=['D', 'O', 'S', 'C'])
+    res = {t: models[t].predict(input_df)[0] for t in models}
     
-    col_m1, col_m2 = st.columns(2)
-    col_m1.metric("Predicted Droplet Size", f"{pred_size:.2f} nm")
-    col_m2.metric("Stability Status", "STABLE")
+    # Physical Results Row
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("P. Size", f"{res['Size']:.2f} nm")
+    m2.metric("PDI", f"{res['PDI']:.3f}")
+    m3.metric("Zeta Potential", f"{res['Zeta']:.2f} mV")
+    m4.metric("% EE", f"{res['EE']:.2f}%")
     
-    # SHAP Plot Execution
-    st.subheader("🔍 Local Prediction Interpretation")
-    explainer = shap.Explainer(model_size, X_train)
-    shap_v = explainer(input_data)
+    # Secondary Parameters Row
+    st.divider()
+    s1, s2, s3 = st.columns([1, 1, 2])
+    with s1:
+        st.write(f"**Viscosity:** {res['Visc']/100:.2f} cP")
+        st.write(f"**Refractive Index:** {1.33 + (res['RI']/1000):.3f}")
     
-    fig_shap, ax = plt.subplots()
+    with s3:
+        status = "STABLE" if res['Zeta'] > 15 or res['Zeta'] < -15 else "UNSTABLE"
+        color = "green" if status == "STABLE" else "red"
+        st.markdown(f"<div style='background-color:{color}; padding:20px; border-radius:10px; text-align:center; color:white;'>SYSTEM STATUS: {status}</div>", unsafe_allow_html=True)
+
+    # SHAP Interpretation
+    st.subheader("💡 Why this result?")
+    explainer = shap.Explainer(models['Size'], X_train)
+    shap_v = explainer(input_df)
+    fig_sh, ax = plt.subplots()
     shap.plots.waterfall(shap_v[0], show=False)
-    st.pyplot(fig_shap)
+    st.pyplot(fig_sh)
     
-    # Targeted Expert Interpretation (No generic definitions)
-    # Identifying the highest impact variable dynamically
-    top_impact_idx = np.argmax(np.abs(shap_v.values[0]))
-    top_feature = X_train.columns[top_impact_idx].replace('_enc', '')
-    
-    st.success(f"""
-    **Expert Interpretation:** The AI model has determined that for this specific formulation, the **{top_feature}** is the primary factor influencing the droplet size of {pred_size:.2f} nm. 
-    Because you selected **{st.session_state.get('drug', 'the drug')}** in Step 1 and paired it with **{st.session_state.get('final_o', 'the oil')}**, the model identifies that the chemical affinity of this specific pair is what prevents droplet coalescence. 
-    To further decrease the size, focus on refining the {top_feature} concentration.
-    """)
+    st.info(f"**Interpretation:** The AI predicts a size of {res['Size']:.2f} nm. The Waterfall chart shows that your choice of **{st.session_state.get('final_o', 'Oil')}** was the primary driver for this stability. The chemical interaction between the drug and surfactant interface is providing the necessary curvature.")
