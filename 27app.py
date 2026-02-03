@@ -37,7 +37,6 @@ def load_and_clean_data():
 df = load_and_clean_data()
 
 # --- 2. AI ENGINE ---
-    elif nav == "Step 2: Reactive Solubility":
         st.header("2. Enhanced Reactive Solubility Prediction")
         st.markdown("Select components to estimate the drug's solubility profile and miscibility potential.")
         
