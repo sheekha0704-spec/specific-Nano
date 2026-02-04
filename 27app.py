@@ -152,11 +152,10 @@ if df is not None:
     elif nav == "Step 4: AI Prediction":
         st.header("4. Batch Estimation & Interpretability")
         try:
-            # Safety check for required session state variables
             if 'drug' not in st.session_state or 'f_o' not in st.session_state:
-                st.warning("⚠️ Please complete the previous steps (Sourcing & Solubility) to generate a prediction.")
+                st.warning("⚠️ Please complete Steps 1 and 2 first.")
             else:
-                # 1. Prepare Input for AI Model
+                # 1. Prepare Input
                 input_df = pd.DataFrame([{
                     'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
                     'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
@@ -164,69 +163,73 @@ if df is not None:
                     'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
                 }])
                 
-                # 2. Secure Predictions (Handling NoneType and 0 errors)
+                # 2. Secure Predictions using your CSV's exact column names
                 res = {}
-                target_keys = ['Size_nm', 'PDI', 'Zeta_mV', 'EE_percent']
-                for k in target_keys:
-                    if k in models:
-                        val = models[k].predict(input_df)[0]
-                        # Ensure values are physically possible (not 0 or negative)
-                        res[k] = val if val > 0 or k == 'Zeta_mV' else df[k].median()
-                    else:
-                        res[k] = df[k].median()
-                
-                # 3. Calculate Derived Parameters (Total 6)
-                # Stability Score: A higher absolute Zeta and lower PDI increase stability
-                stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
-                # Loading Capacity: Theoretical calculation based on EE% and Size
-                loading_cap = (res['EE_percent'] / 100) * (200 / res['Size_nm'])
+                # Mapping internal keys to your CSV column names
+                column_mapping = {
+                    'Size_nm': 'Size_nm',
+                    'PDI': 'PDI',
+                    'Zeta_mV': 'Zeta_mV',
+                    'EE': 'Encapsulation_Efficiency'
+                }
 
-                # 4. Display Formulation Verdict
+                for key, csv_col in column_mapping.items():
+                    if csv_col in models:
+                        val = models[csv_col].predict(input_df)[0]
+                        # Handling decimal vs percentage (e.g., 0.95 vs 95)
+                        if key == 'EE' and val <= 1.0:
+                            val = val * 100
+                        res[key] = val if val > 0 or key == 'Zeta_mV' else df[csv_col].median()
+                    else:
+                        # Fallback if model training failed for a column
+                        res[key] = df[csv_col].median() if csv_col in df.columns else 0.0
+
+                # 3. Calculate Derived Parameters
+                # Stability Score based on Zeta and PDI
+                stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
+                # Loading Capacity (using 200 as a standard baseline volume factor)
+                loading_cap = (res['EE'] / 100) * (200 / res['Size_nm'])
+
+                # 4. Formulation Verdict Header
                 st.subheader("Formulation Status")
-                # Industry standard for stable nanoemulsions: PDI < 0.3 and |Zeta| > 20mV
+                # Stable defined by PDI < 0.3 and Zeta > 20mV or < -20mV
                 is_stable = res['PDI'] < 0.3 and abs(res['Zeta_mV']) > 20
                 
                 if is_stable:
-                    st.success("✅ FORMULATION STATUS: STABLE (Highly Recommended for Trial)")
+                    st.success("✅ FORMULATION STATUS: STABLE (Highly Recommended)")
                 else:
-                    st.warning("⚠️ FORMULATION STATUS: POTENTIALLY UNSTABLE (Optimization of Smix recommended)")
+                    st.warning("⚠️ FORMULATION STATUS: POTENTIALLY UNSTABLE (Check Smix Ratio)")
 
-                # 5. Display Quantitative Metrics
+                # 5. Display 6 Quantitative Results
                 col_a, col_b, col_c = st.columns(3)
-                
                 with col_a:
                     st.metric("Droplet Size", f"{res['Size_nm']:.2f} nm")
-                    st.metric("Encapsulation Efficiency", f"{res['EE_percent']:.2f} %")
-                
+                    st.metric("EE %", f"{res['EE']:.2f} %")
                 with col_b:
-                    st.metric("Polydispersity Index (PDI)", f"{res['PDI']:.3f}")
-                    st.metric("AI Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
-                
+                    st.metric("PDI", f"{res['PDI']:.3f}")
+                    st.metric("Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
                 with col_c:
                     st.metric("Zeta Potential", f"{res['Zeta_mV']:.2f} mV")
                     st.metric("Loading Capacity", f"{loading_cap:.2f} mg/mL")
 
                 st.divider()
                 
-                # 6. SHAP Interpretability Logic
+                # 6. Interpretability
                 st.subheader("AI Decision Logic (SHAP Waterfall)")
                 
                 
                 explainer = shap.Explainer(models['Size_nm'], X_train)
                 sv = explainer(input_df)
-                
                 fig_sh, ax = plt.subplots(figsize=(10, 4))
                 shap.plots.waterfall(sv[0], show=False)
-                plt.title("Impact of Components on Droplet Size")
                 st.pyplot(fig_sh)
 
                 st.info("""
-                **How to read this chart:**
-                * **Red Bars:** These components are **increasing** the droplet size.
-                * **Blue Bars:** These components are **decreasing** the droplet size (improving nano-dispersion).
-                * **f(x):** This is the final prediction for your current selection.
+                **Interpretability Notes:**
+                * **Red/Positive bars:** Components pushing size higher (e.g., higher Oil phase).
+                * **Blue/Negative bars:** Components successfully reducing size (e.g., effective Surfactant choice).
                 """)
 
         except Exception as e:
-            st.error(f"Prediction Engine Error: {str(e)}")
-            st.info("Check if your CSV headers exactly match: Size_nm, PDI, Zeta_mV, EE_percent")
+            st.error(f"Prediction Error: {str(e)}")
+            st.info("Tip: Ensure 'Encapsulation_Efficiency' is the column name in your CSV.")
