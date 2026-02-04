@@ -148,50 +148,85 @@ if df is not None:
             fig.update_layout(ternary=dict(sum=100, aaxis_title='Oil', baxis_title='Smix', caxis_title='Water'))
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- STEP 4: AI PREDICTION (FIXED: NON-ZERO & STABILITY VERDICT) ---
+    # --- STEP 4: AI PREDICTION & INTERPRETABILITY ---
     elif nav == "Step 4: AI Prediction":
         st.header("4. Batch Estimation & Interpretability")
         try:
-            input_df = pd.DataFrame([{
-                'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
-                'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
-                'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
-                'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
-            }])
-            
-            # Use a dictionary to store results with fallback to median if prediction is 0 or negative
-            res = {}
-            for k in models:
-                pred = models[k].predict(input_df)[0]
-                res[k] = pred if pred > 0 else df[k].median()
-            
-            # Calculations
-            stability_score = (abs(res.get('Zeta_mV', 30)) / 30) * (1 - res.get('PDI', 0.2)) * 100
-            loading = (res.get('EE_percent', 80) / 100) * (200 / res.get('Size_nm', 100))
-
-            # --- STABILITY VERDICT TAB ---
-            st.subheader("Formulation Status")
-            is_stable = res.get('PDI', 1) < 0.3 and abs(res.get('Zeta_mV', 0)) > 20
-            if is_stable:
-                st.success("✅ FORMULATION STATUS: STABLE (Highly Recommended)")
+            # Safety check for required session state variables
+            if 'drug' not in st.session_state or 'f_o' not in st.session_state:
+                st.warning("⚠️ Please complete the previous steps (Sourcing & Solubility) to generate a prediction.")
             else:
-                st.warning("⚠️ FORMULATION STATUS: POTENTIALLY UNSTABLE (Optimization Needed)")
+                # 1. Prepare Input for AI Model
+                input_df = pd.DataFrame([{
+                    'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
+                    'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
+                    'Surfactant': encoders['Surfactant'].transform([st.session_state.f_s])[0],
+                    'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
+                }])
+                
+                # 2. Secure Predictions (Handling NoneType and 0 errors)
+                res = {}
+                target_keys = ['Size_nm', 'PDI', 'Zeta_mV', 'EE_percent']
+                for k in target_keys:
+                    if k in models:
+                        val = models[k].predict(input_df)[0]
+                        # Ensure values are physically possible (not 0 or negative)
+                        res[k] = val if val > 0 or k == 'Zeta_mV' else df[k].median()
+                    else:
+                        res[k] = df[k].median()
+                
+                # 3. Calculate Derived Parameters (Total 6)
+                # Stability Score: A higher absolute Zeta and lower PDI increase stability
+                stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
+                # Loading Capacity: Theoretical calculation based on EE% and Size
+                loading_cap = (res['EE_percent'] / 100) * (200 / res['Size_nm'])
 
-            col_a, col_b, col_c = st.columns(3)
-            col_a.metric("Size", f"{res.get('Size_nm'):.2f} nm")
-            col_a.metric("EE %", f"{res.get('EE_percent'):.2f}%")
-            col_b.metric("PDI", f"{res.get('PDI'):.3f}")
-            col_b.metric("Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
-            col_c.metric("Zeta Potential", f"{res.get('Zeta_mV'):.2f} mV")
-            col_c.metric("Loading Capacity", f"{loading:.2f} mg/mL")
+                # 4. Display Formulation Verdict
+                st.subheader("Formulation Status")
+                # Industry standard for stable nanoemulsions: PDI < 0.3 and |Zeta| > 20mV
+                is_stable = res['PDI'] < 0.3 and abs(res['Zeta_mV']) > 20
+                
+                if is_stable:
+                    st.success("✅ FORMULATION STATUS: STABLE (Highly Recommended for Trial)")
+                else:
+                    st.warning("⚠️ FORMULATION STATUS: POTENTIALLY UNSTABLE (Optimization of Smix recommended)")
 
-            st.divider()
-            st.subheader("AI Decision Logic (SHAP Waterfall)")
-            explainer = shap.Explainer(models['Size_nm'], X_train)
-            sv = explainer(input_df)
-            fig_sh, _ = plt.subplots(figsize=(10, 4))
-            shap.plots.waterfall(sv[0], show=False)
-            st.pyplot(fig_sh)
+                # 5. Display Quantitative Metrics
+                col_a, col_b, col_c = st.columns(3)
+                
+                with col_a:
+                    st.metric("Droplet Size", f"{res['Size_nm']:.2f} nm")
+                    st.metric("Encapsulation Efficiency", f"{res['EE_percent']:.2f} %")
+                
+                with col_b:
+                    st.metric("Polydispersity Index (PDI)", f"{res['PDI']:.3f}")
+                    st.metric("AI Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
+                
+                with col_c:
+                    st.metric("Zeta Potential", f"{res['Zeta_mV']:.2f} mV")
+                    st.metric("Loading Capacity", f"{loading_cap:.2f} mg/mL")
+
+                st.divider()
+                
+                # 6. SHAP Interpretability Logic
+                st.subheader("AI Decision Logic (SHAP Waterfall)")
+                
+                
+                explainer = shap.Explainer(models['Size_nm'], X_train)
+                sv = explainer(input_df)
+                
+                fig_sh, ax = plt.subplots(figsize=(10, 4))
+                shap.plots.waterfall(sv[0], show=False)
+                plt.title("Impact of Components on Droplet Size")
+                st.pyplot(fig_sh)
+
+                st.info("""
+                **How to read this chart:**
+                * **Red Bars:** These components are **increasing** the droplet size.
+                * **Blue Bars:** These components are **decreasing** the droplet size (improving nano-dispersion).
+                * **f(x):** This is the final prediction for your current selection.
+                """)
 
         except Exception as e:
-            st.error(f"Prediction Error: {str(e)}")
+            st.error(f"Prediction Engine Error: {str(e)}")
+            st.info("Check if your CSV headers exactly match: Size_nm, PDI, Zeta_mV, EE_percent")
