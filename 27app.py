@@ -73,6 +73,7 @@ st.session_state.nav_index = steps.index(nav)
 
 if df is not None:
     # --- STEP 1 ---
+   # --- STEP 1 ---
     if nav == "Step 1: Sourcing":
         st.header("1. Drug-Driven Component Sourcing")
         drug = st.selectbox("Select Drug", sorted(df['Drug_Name'].unique()))
