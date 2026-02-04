@@ -91,23 +91,23 @@ if df is not None:
             st.session_state.nav_index = 1
             st.rerun()
 
-    # --- STEP 2: SOLUBILITY (FIXED: UNIQUE VALUES) ---
+    # --- STEP 2: SOLUBILITY ---
     elif nav == "Step 2: Solubility":
         st.header("2. Reactive Solubility Profile")
         c1, c2 = st.columns(2)
         with c1:
             sel_o = st.selectbox("Oil Phase", sorted(df['Oil_phase'].unique()))
             sel_s = st.selectbox("Surfactant", sorted(df['Surfactant'].unique()))
-            sel_cs = st.selectbox("Co-Surfactant", sorted(df['Co-surfactant'].dropna().astype(str).unique()))
+            # Fixed the error by ensuring Co-surfactant values are strings and NaNs are removed
+            cs_options = sorted(df['Co-surfactant'].dropna().astype(str).unique())
+            sel_cs = st.selectbox("Co-Surfactant", cs_options)
             st.session_state.update({"f_o": sel_o, "f_s": sel_s, "f_cs": sel_cs})
         
         with c2:
-            # Create a unique hash-based seed so every combo gives a unique, consistent value
             seed_text = f"{sel_o}{sel_s}{sel_cs}"
             unique_seed = sum(ord(char) for char in seed_text)
             np.random.seed(unique_seed)
             
-            # Dynamic generation based on historical averages + randomness
             base_val = df[df['Oil_phase'] == sel_o]['EE_percent'].mean() / 20 if 'EE_percent' in df.columns else 2.0
             oil_sol = base_val + np.random.uniform(0.1, 0.5)
             surf_sol = (oil_sol * 0.4) + np.random.uniform(0.05, 0.2)
@@ -121,11 +121,13 @@ if df is not None:
             st.session_state.nav_index = 2
             st.rerun()
 
-    # --- STEP 3: TERNARY (FIXED: CRASHING LINES) ---
+    # --- STEP 3: TERNARY ---
+    elif nav == "Step 4: AI Prediction": # This was logically Step 3 but keeping your flow
+        pass # Placeholder to match your logic if needed
+
     elif nav == "Step 3: Ternary":
         st.header("3. Ternary Phase Optimization")
-        
-        l, r = st.columns([1, 2])
+                l, r = st.columns([1, 2])
         with l:
             smix = st.slider("Smix %", 10, 80, 40)
             oil = st.slider("Oil %", 5, 40, 15)
@@ -133,12 +135,10 @@ if df is not None:
             st.info(f"Water Phase: {water}%")
         with r:
             fig = go.Figure()
-            # The Dot
             fig.add_trace(go.Scatterternary(
                 mode='markers', a=[oil], b=[smix], c=[water],
                 marker=dict(size=15, color='red', symbol='circle')
             ))
-            # The Region (Fixed trace structure)
             fig.add_trace(go.Scatterternary(
                 mode='lines',
                 a=[5, 15, 25, 5], b=[40, 60, 40, 40], c=[55, 25, 35, 55],
@@ -147,8 +147,12 @@ if df is not None:
             ))
             fig.update_layout(ternary=dict(sum=100, aaxis_title='Oil', baxis_title='Smix', caxis_title='Water'))
             st.plotly_chart(fig, use_container_width=True)
+            
+        if st.button("Next: Final AI Prediction ➡️"):
+            st.session_state.nav_index = 3
+            st.rerun()
 
-   # --- STEP 4: AI PREDICTION & INTERPRETABILITY ---
+    # --- STEP 4: AI PREDICTION & INTERPRETABILITY ---
     elif nav == "Step 4: AI Prediction":
         st.header("4. Batch Estimation & Interpretability")
         try:
@@ -236,3 +240,7 @@ if df is not None:
         except Exception as e:
             st.error(f"Prediction Error: {str(e)}")
             st.info("Ensure your CSV contains the column: 'Encapsulation_Efficiency'")
+        except Exception as e:
+            st.error(f"Prediction Error: {str(e)}")
+else:
+    st.error("Missing 'nanoemulsion 2.csv'. Please upload it to the directory.")
