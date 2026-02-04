@@ -148,14 +148,14 @@ if df is not None:
             fig.update_layout(ternary=dict(sum=100, aaxis_title='Oil', baxis_title='Smix', caxis_title='Water'))
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- STEP 4: AI PREDICTION & INTERPRETABILITY ---
+   # --- STEP 4: AI PREDICTION & INTERPRETABILITY ---
     elif nav == "Step 4: AI Prediction":
         st.header("4. Batch Estimation & Interpretability")
         try:
             if 'drug' not in st.session_state or 'f_o' not in st.session_state:
-                st.warning("⚠️ Please complete Steps 1 and 2 first.")
+                st.warning("⚠️ Please complete Steps 1 and 2 first to select your components.")
             else:
-                # 1. Prepare Input
+                # 1. Prepare Input for AI
                 input_df = pd.DataFrame([{
                     'Drug_Name': encoders['Drug_Name'].transform([st.session_state.drug])[0],
                     'Oil_phase': encoders['Oil_phase'].transform([st.session_state.f_o])[0],
@@ -163,48 +163,50 @@ if df is not None:
                     'Co-surfactant': encoders['Co-surfactant'].transform([str(st.session_state.f_cs)])[0]
                 }])
                 
-                # 2. Secure Predictions using your CSV's exact column names
+                # 2. Secure Predictions using exact CSV column names
                 res = {}
-                # Mapping internal keys to your CSV column names
-                column_mapping = {
+                # Mapping display keys to your specific CSV column names
+                target_map = {
                     'Size_nm': 'Size_nm',
                     'PDI': 'PDI',
                     'Zeta_mV': 'Zeta_mV',
                     'EE': 'Encapsulation_Efficiency'
                 }
 
-                for key, csv_col in column_mapping.items():
+                for key, csv_col in target_map.items():
                     if csv_col in models:
                         val = models[csv_col].predict(input_df)[0]
-                        # Handling decimal vs percentage (e.g., 0.95 vs 95)
+                        
+                        # Handle decimal vs percentage (e.g., convert 0.925 to 92.5%)
                         if key == 'EE' and val <= 1.0:
                             val = val * 100
-                        res[key] = val if val > 0 or key == 'Zeta_mV' else df[csv_col].median()
+                            
+                        # Fallback if prediction is logically impossible (0 or None)
+                        res[key] = val if val != 0 else df[csv_col].median()
                     else:
-                        # Fallback if model training failed for a column
                         res[key] = df[csv_col].median() if csv_col in df.columns else 0.0
 
-                # 3. Calculate Derived Parameters
-                # Stability Score based on Zeta and PDI
+                # 3. Calculate Derived Parameters (Total 6)
+                # Stability Score: Higher absolute Zeta and lower PDI indicate better stability
                 stability_score = (abs(res['Zeta_mV']) / 30) * (1 - res['PDI']) * 100
-                # Loading Capacity (using 200 as a standard baseline volume factor)
+                # Loading Capacity: Factor of EE and droplet size
                 loading_cap = (res['EE'] / 100) * (200 / res['Size_nm'])
 
                 # 4. Formulation Verdict Header
                 st.subheader("Formulation Status")
-                # Stable defined by PDI < 0.3 and Zeta > 20mV or < -20mV
+                # Benchmarks for nanoemulsion stability: PDI < 0.3 and |Zeta| > 20mV
                 is_stable = res['PDI'] < 0.3 and abs(res['Zeta_mV']) > 20
                 
                 if is_stable:
                     st.success("✅ FORMULATION STATUS: STABLE (Highly Recommended)")
                 else:
-                    st.warning("⚠️ FORMULATION STATUS: POTENTIALLY UNSTABLE (Check Smix Ratio)")
+                    st.warning("⚠️ FORMULATION STATUS: POTENTIALLY UNSTABLE (Optimization Recommended)")
 
                 # 5. Display 6 Quantitative Results
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
                     st.metric("Droplet Size", f"{res['Size_nm']:.2f} nm")
-                    st.metric("EE %", f"{res['EE']:.2f} %")
+                    st.metric("Encapsulation Efficiency", f"{res['EE']:.2f} %")
                 with col_b:
                     st.metric("PDI", f"{res['PDI']:.3f}")
                     st.metric("Stability Score", f"{max(0, min(100, stability_score)):.1f}/100")
@@ -214,7 +216,7 @@ if df is not None:
 
                 st.divider()
                 
-                # 6. Interpretability
+                # 6. Interpretability Plot
                 st.subheader("AI Decision Logic (SHAP Waterfall)")
                 
                 
@@ -225,11 +227,12 @@ if df is not None:
                 st.pyplot(fig_sh)
 
                 st.info("""
-                **Interpretability Notes:**
-                * **Red/Positive bars:** Components pushing size higher (e.g., higher Oil phase).
-                * **Blue/Negative bars:** Components successfully reducing size (e.g., effective Surfactant choice).
+                **Interpretability Guide:**
+                * **Red Bars (+):** Components contributing to larger droplet sizes.
+                * **Blue Bars (-):** Components helping achieve smaller, optimized droplet sizes.
+                * **f(x):** The predicted size for your specific formulation selection.
                 """)
 
         except Exception as e:
             st.error(f"Prediction Error: {str(e)}")
-            st.info("Tip: Ensure 'Encapsulation_Efficiency' is the column name in your CSV.")
+            st.info("Ensure your CSV contains the column: 'Encapsulation_Efficiency'")
