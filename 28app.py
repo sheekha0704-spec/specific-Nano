@@ -1,5 +1,5 @@
 import streamlit as st
-import pd as pd
+import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from sklearn.ensemble import GradientBoostingRegressor
@@ -21,6 +21,7 @@ def load_and_clean_data():
             match = re.findall(r"[-+]?\d*\.\d+|\d+", value)
             return float(match[0]) if match else np.nan
         return value
+    # Corrected column names based on your CSV
     targets = ['Size_nm', 'PDI', 'Zeta_mV', 'Encapsulation_Efficiency']
     for col in targets:
         if col in df.columns:
@@ -61,7 +62,6 @@ if df is not None:
         drug = st.selectbox("Select Drug", sorted(df['Drug_Name'].unique()))
         st.session_state.drug = drug
         
-        # Filter data for specific recommendations
         d_subset = df[df['Drug_Name'] == drug]
         o_list = sorted(d_subset['Oil_phase'].unique())
         s_list = sorted(d_subset['Surfactant'].unique())
@@ -69,20 +69,17 @@ if df is not None:
 
         st.session_state.update({"o": o_list, "s": s_list, "cs": cs_list})
 
-        st.subheader(f"Recommended Components for {drug}")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.success("🛢️ **Suggested Oil Phases**")
-            for item in o_list[:5]: st.write(f"• {item}")
-            
-        with col2:
-            st.info("🧼 **Suggested Surfactants**")
-            for item in s_list[:5]: st.write(f"• {item}")
-            
-        with col3:
-            st.warning("🧪 **Suggested Co-Surfactants**")
-            for item in cs_list[:5]: st.write(f"• {item}")
+        st.subheader(f"Best Matched Components for {drug}")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.info("🛢️ **Recommended Oils**")
+            for item in o_list[:3]: st.write(f"• {item}")
+        with c2:
+            st.success("🧼 **Recommended Surfactants**")
+            for item in s_list[:3]: st.write(f"• {item}")
+        with c3:
+            st.warning("🧪 **Recommended Co-Surfactants**")
+            for item in cs_list[:3]: st.write(f"• {item}")
 
         if st.button("Next: Solubility Analysis ➡️"):
             st.session_state.nav_index = 1
@@ -115,11 +112,13 @@ if df is not None:
         
         l, r = st.columns([1, 2])
         with l:
-            smix, oil = st.slider("Smix %", 10, 80, 40), st.slider("Oil %", 5, 40, 15)
-            st.info(f"Water Phase: {100 - oil - smix}%")
+            smix = st.slider("Smix %", 10, 80, 40)
+            oil = st.slider("Oil %", 5, 40, 15)
+            water = 100 - oil - smix
+            st.info(f"Water Phase: {water}%")
         with r:
             fig = go.Figure()
-            fig.add_trace(go.Scatterternary(mode='markers', a=[oil], b=[smix], c=[100-oil-smix], marker=dict(size=15, color='red')))
+            fig.add_trace(go.Scatterternary(mode='markers', a=[oil], b=[smix], c=[water], marker=dict(size=15, color='red')))
             fig.add_trace(go.Scatterternary(mode='lines', a=[5,15,25,5], b=[40,60,40,40], c=[55,25,35,55], fill='toself', fillcolor='rgba(0,255,0,0.2)', line=dict(color='green')))
             fig.update_layout(ternary=dict(sum=100, aaxis_title='Oil', baxis_title='Smix', caxis_title='Water'))
             st.plotly_chart(fig, use_container_width=True)
@@ -160,3 +159,5 @@ if df is not None:
                 shap.plots.waterfall(sv[0], show=False)
                 st.pyplot(fig_sh)
         except Exception as e: st.error(f"Error: {str(e)}")
+else:
+    st.error("Missing 'nanoemulsion 2.csv'. Please upload it to the directory.")
