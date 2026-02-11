@@ -1,0 +1,101 @@
+Drug_Name,Surfactant,Co-surfactant,Oil_phase,Prep_method,Size_nm,PDI,Zeta_mV,Drug_Loading,Encapsulation_Efficiency,Stability,Primary_Citation
+Ibuprofen,Tween 80,Ethanol,Olive Oil,Ultrasonication,120.5,0.15,-22.4,5 mg/mL,92.5%,Stable,Shakeel et al. (2014) J. Drug Target
+Ketoprofen,Tween 80,PEG 400,Captex 200,Titration,85,0.11,-16.3,10 mg/mL,95.0%,Stable,Khoo et al. (1998) Int. J. Pharm.
+Paclitaxel,Cremophor EL,Ethanol,Soybean Oil,High Pressure Homog.,145.2,0.18,-12.5,2 mg/mL,98.2%,Stable,Zhang et al. (2011) Int. J. Pharm.
+Curcumin,Tween 20,Span 80,MCT Oil,Spontaneous,162,0.22,-28.1,20 mg/mL,88.5%,Stable,McClements et al. (2012) Soft Matter
+Dexamethasone,Labrasol,Transcutol,Labrafil,Phase Inversion,110.4,0.14,-19.8,1.5 mg/mL,94.1%,Stable,Shafiq et al. (2007) Eur. J. Pharm.
+Artemether,Tween 80,Ethanol,Coconut Oil,Ultrasonication,79,0.14,-15,N/A,98.42%,Stable,Nirmala et al. (2013) J. Mol. Liq.
+Diclofenac,Tween 80,Prop. Glycol,Castor Oil,High Shear Mix,134.2,0.2,-31.5,1%,91.2%,Stable,Boonme et al. (2011) AAPS PharmSciTech
+Limonene,Tween 80,N/A,Orange Oil,Microfluidization,180,0.21,-22,5 wt%,N/A,Stable,Salvia-Trujillo et al. (2013) Food Chem.
+Vitamin E,Lecithin,N/A,Corn Oil,Ultrasonication,195,0.25,-35.2,10%,96.4%,Stable,Kuo et al. (2016) J. Food Drug Anal.
+Nicardipine,Labrasol,Transcutol P,PG Monolaurate,Titration,116.2,0.12,-32.3,N/A,N/A,Stable,Azeem et al. (2009) AAPS PharmSciTech
+Bergenin,Tween 80,PEG 400,Castor Oil,Pseudo-ternary,98.5,0.19,-35,High,N/A,Stable,Singh et al. (2010) Drug Dev. Ind. Pharm.
+Quercetin,Tween 80,Ethanol,Sunflower Oil,Spontaneous,140.8,0.23,-24.6,5 mg/mL,90.3%,Stable,Anuchapreeda et al. (2012) Phytomedicine
+Caffeine,Span 20,Tween 20,Mineral Oil,Ultrasonication,155,0.17,-18.9,2.5 mg/mL,85.2%,Stable,Bolzinger et al. (2008) Surf. Sci. Rep.
+Acyclovir,Labrasol,Transcutol,Capryol 90,Titration,128.6,0.13,-26.4,N/A,89.5%,Stable,Ghosh et al. (2006) AAPS PharmSciTech
+Tacrolimus,Tween 80,Ethanol,Miglyol 812,High Pressure Homog.,112.4,0.16,-14.2,1 mg/mL,97.8%,Stable,Pouton et al. (2006) Adv. Drug Deliv. Rev.
+Lornoxicam,Tween 80,Prop. Glycol,Oleic Acid,Ultrasonication,142.1,0.21,-30.4,4 mg/mL,93.2%,Stable,Shaker et al. (2015) J. Pharm. Invest.
+Resveratrol,Lecithin,Tween 80,Grape Seed Oil,Microfluidization,175.5,0.19,-42.1,2%,96.7%,Stable,Davidov-Pardo et al. (2015) J. Food Eng.
+Indomethacin,Cremophor RH40,PEG 400,Labrafil M,Spontaneous,118,0.11,-21.3,0.5%,95.6%,Stable,Yuan et al. (2006) Coll. Surf. B.
+Glibenclamide,Tween 80,Ethanol,Almond Oil,Ultrasonication,160.2,0.24,-25.8,5 mg/mL,91.4%,Stable,Bachhav et al. (2009) Drug Dev. Ind. Pharm.
+Atorvastatin,Labrasol,Transcutol,Capmul MCM,Titration,135.4,0.15,-29.2,N/A,92.9%,Stable,Khan et al. (2015) Coll. Surf. B.
+Tea Tree Oil,Tween 80,Span 80,TTO,High Shear Mix,188,0.22,-20.5,100%,N/A,Stable,Li et al. (2012) J. Nanomater.
+Clobetasol,Tween 80,PEG 400,Eucalyptus Oil,Ultrasonication,115.7,0.18,-18.7,0.05%,94.8%,Stable,Alam et al. (2012) Drug Dev. Ind. Pharm.
+Eugenol,Lecithin,N/A,Clove Oil,Ultrasonication,150,0.2,-38.5,10%,98.1%,Stable,Ghosh et al. (2013) Ind. Crops Prod.
+Meloxicam,Labrasol,Ethanol,Sesame Oil,Titration,145.8,0.14,-27.6,7.5 mg/mL,90.1%,Stable,Khurana et al. (2013) Coll. Surf. B.
+Carvedilol,Tween 80,Transcutol,Peppermint Oil,Spontaneous,122.3,0.12,-30.1,10 mg/mL,95.5%,Stable,Singh et al. (2012) Drug Dev. Ind. Pharm.
+Flurbiprofen,Tween 80,Prop. Glycol,Linseed/Triacetin,High Pressure Homog.,142,0.18,-28.5,2.5%,96.2%,Stable,Park et al. (2011) Int. J. Pharm.
+Apigenin,TPGS,Lecithin,Avocado Oil,Ultrasonication,112.4,0.12,-33.2,1.2 mg/mL,99%,Stable,Jang et al. (2013) Food Sci. Biotech.
+Lapachol,HCO-40,N/A,MCT Oil,Phase Inversion,185,0.19,-30,1.25 mg/mL,N/A,Stable,Cavalcanti et al. (2011) J. Nanoparticle Res.
+Pimecrolimus,Tween 80,Transcutol P,Benzyl Alcohol,Ultrasonication,139.1,0.24,-9.4,5 mg/g,94.5%,Stable,Baboota et al. (2007) Methods Find. Exp.
+Vitamin D3,Labrasol,Transcutol HP,IPM,High Pressure Homog.,115,0.15,-20.5,3 mg/mL,97.2%,Stable,Guttoff et al. (2015) Food Chem.
+Rosmarinic Acid,Tween 80,PEG 400,Olive Oil,Spontaneous,158,0.21,-15.8,2 mg/mL,91%,Stable,Duarte et al. (2015) Ind. Crops Prod.
+Thyme Oil,Lecithin,Ethanol,Thyme Oil,Ultrasonication,92.5,0.11,-40.1,100%,N/A,High,Xue et al. (2015) Food Hydrocoll.
+Genistein,Labrasol,Maisine CC,Capryol 90,Titration,105.4,0.14,-26.3,N/A,93.8%,Stable,Al-Suwayeh et al. (2014) Med. Princ. Pract.
+Emodin,Tween 20,Prop. Glycol,Castor Oil,High Shear Mix,168,0.22,-19.7,5 mg/mL,89.5%,Stable,Zhang et al. (2013) J. Nanopart. Res.
+Beta-Carotene,Tween 80,Span 20,Corn Oil,Microfluidization,195.2,0.25,-35.2,1.5 mg/mL,95.4%,Stable,Yuan et al. (2008) Food Chem.
+Lutein,Lecithin,N/A,Sunflower Oil,Ultrasonication,182,0.18,-42,10 mg/mL,98.1%,Stable,Chuacharoen et al. (2016) Food Chem.
+Clotrimazole,Labrasol,Transcutol,Labrafil M,Titration,110.2,0.13,-31.5,1%,95.6%,Stable,Patel et al. (2012) ISRN Pharmaceutics
+Amphotericin B,Tween 80,PEG 400,IPM,Ultrasonication,145.8,0.16,-14.2,5 mg/mL,92.8%,Stable,Butani et al. (2014) Coll. Surf. B.
+Progesterone,Cremophor EL,Ethanol,Sesame Oil,Spontaneous,128,0.19,-22.4,2 mg/mL,96.5%,Stable,Venkatesh et al. (2010) J. Med. Life
+Saquinavir,Tween 80,Span 80,Oleic Acid,High Pressure Homog.,118.4,0.12,-29.8,N/A,94.1%,Stable,Vyavahare et al. (2014) J. Nanomed.
+Griseofulvin,Tween 20,PEG 600,Soybean Oil,Ultrasonication,175,0.2,-18.6,10 mg/mL,88.2%,Stable,Jang et al. (2015) Arch. Pharm. Res.
+Nimesulide,Labrasol,Transcutol,Peppermint Oil,Titration,95,0.11,-27.2,1%,93.4%,Stable,Siqueira et al. (2014) Pharmaceutics
+Zidovudine,Tween 80,Prop. Glycol,Labrafil,Spontaneous,112.5,0.14,-15.5,5 mg/mL,97.1%,Stable,Negi et al. (2016) J. Drug Deliv. Sci.
+Tamoxifen,Cremophor RH40,Ethanol,Castor Oil,High Pressure Homog.,155.6,0.17,-30.2,10 mg/mL,98.3%,Stable,Wahab et al. (2014) J. Pharm. Bioall.
+Celecoxib,Tween 80,Transcutol,Capryol,Titration,108,0.15,-24.1,2%,95.1%,Stable,Shakeel et al. (2012) J. Nanotech.
+Mebudipine,Tween 80,Prop. Glycol,Ethyl Oleate,Spontaneous,122,0.18,-12.3,N/A,92.9%,Stable,Honary et al. (2013) J. Nanomed.
+Clarithromycin,Labrasol,PEG 400,Capmul,Titration,134.5,0.16,-26.8,5 mg/mL,94.6%,Stable,Goyal et al. (2012) Int. J. Drug Deliv.
+Felodipine,Tween 20,Ethanol,Olive Oil,Ultrasonication,148,0.21,-19.4,2.5 mg/mL,91.8%,Stable,Patil et al. (2014) J. Pharm. Res.
+Verapamil,Tween 80,Prop. Glycol,Eucalyptus Oil,High Shear Mix,110.5,0.13,-21.2,10 mg/mL,96.7%,Stable,Azeem et al. (2009) Drug Dev. Ind. Pharm.
+Nifedipine,Labrasol,Transcutol,IPM,Titration,98.7,0.1,-28.4,5 mg/mL,98.9%,Stable,Ali et al. (2014) Saudi Pharm. J.
+Ropinirole,Labrasol,PEG 400,Capryol 90,Spontaneous,29.6,0.18,-12.4,15 mg/mL,98.5%,Stable,Azeem et al. (2012) J. Drug Target.
+Anthocyanin,Tween 80,N/A,Parijoto Oil,High Shear Mix,152.4,0.22,-30.5,7.5%,N/A,Moderate,Syamsul et al. (2019) J. Phys. Conf.
+Lansoprazole,Tween 80,Prop. Glycol,Oleic Acid,Ultrasonication,110,0.14,-18.2,5 mg/mL,92.1%,Stable,Ibrahim et al. (2015) Saudi Pharm. J.
+Emodin,Tween 20,Ethanol,Castor Oil,High Pressure Homog.,145,0.21,-22.3,2 mg/mL,88.4%,Stable,Li et al. (2015) Coll. Surf. A.
+Budesonide,Lecithin,N/A,MCT Oil,Microfluidization,135.2,0.16,-35.8,1 mg/mL,96.7%,Stable,Yang et al. (2013) J. Food Eng.
+Zaltoprofen,Tween 80,Transcutol,Peppermint Oil,Titration,102.4,0.11,-26.7,1%,94.2%,Stable,Park et al. (2013) Int. J. Pharm.
+Ketoconazole,Labrasol,PEG 400,Capmul MCM,Spontaneous,88.5,0.13,-21.4,2%,91.8%,Stable,Patel et al. (2014) J. Pharm. Invest.
+Cinnamaldehyde,Tween 80,N/A,Cinnamon Oil,Ultrasonication,125,0.19,-32.1,100%,99.1%,Stable,Zhang et al. (2015) Food Hydrocoll.
+Safranal,Tween 80,Ethanol,Saffron Oil,High Shear Mix,140.6,0.2,-15.4,5%,N/A,Stable,Esmaeilzadeh et al. (2013) J. Food Eng.
+Naproxen,Tween 80,Prop. Glycol,IPM,Titration,118,0.14,-29,5 mg/mL,95.6%,Stable,Rao et al. (2011) Int. J. Pharm. Sci.
+Griseofulvin,Labrasol,Transcutol,Capryol 90,Spontaneous,155.2,0.23,-18.6,10 mg/mL,87.5%,Stable,Shakeel et al. (2014) J. Nanomed.
+Salicylic Acid,Tween 20,PEG 400,Coconut Oil,Ultrasonication,142.1,0.18,-25.2,2%,93.4%,Stable,Kim et al. (2014) Coll. Surf. A.
+Prednisolone,Cremophor EL,Ethanol,Soybean Oil,Phase Inversion,128.5,0.15,-20.8,1 mg/mL,97.2%,Stable,Bahloul et al. (2014) Int. J. Pharm.
+Doxorubicin,Lecithin,TPGS,Miglyol 812,Microfluidization,110.4,0.12,-38.2,0.5 mg/mL,98.9%,Stable,Chidambaram et al. (2012) Int. J. Pharm.
+Carotenoids,Tween 80,N/A,Palm Oil,High Pressure Homog.,185,0.25,-33.4,1.5 mg/mL,91.2%,Stable,Huan et al. (2016) J. Food Eng.
+Astaxanthin,Tween 20,Span 80,Fish Oil,Ultrasonication,165.7,0.19,-31.6,2.5 mg/mL,95.5%,Stable,Shen et al. (2015) Food Chem.
+Ezetimibe,Labrasol,Transcutol,Capmul,Titration,92.4,0.1,-24.8,10 mg/mL,96.3%,Stable,Dixit et al. (2010) Eur. J. Pharm. Sci.
+Simvastatin,Tween 80,Ethanol,Oleic Acid,Spontaneous,134.2,0.17,-16.9,5 mg/mL,90.8%,Stable,El-Laithy et al. (2013) Coll. Surf. B.
+Ginkgo Extract,Lecithin,Prop. Glycol,Ethyl Oleate,High Shear Mix,148,0.22,-27.5,10 mg/mL,89.6%,Stable,Lin et al. (2014) J. Pharm. Sci.
+Amlodipine,Tween 80,PEG 600,IPM,Ultrasonication,112.5,0.13,-19.4,5 mg/mL,94.1%,Stable,Joshi et al. (2011) Int. J. Pharm.
+Furosemide,Cremophor RH40,Transcutol,Capryol 90,Titration,105,0.11,-22.1,4 mg/mL,92.7%,Stable,Kazi et al. (2013) Int. J. Nanomed.
+Minoxidil,Tween 80,Ethanol,Peppermint Oil,Spontaneous,115.8,0.15,-18.7,5%,98.2%,Stable,Garti et al. (2014) Coll. Surf. A.
+Clobetasol,Labrasol,PEG 400,Capmul MCM,Titration,126.4,0.14,-30.4,0.05%,95.4%,Stable,Alam et al. (2013) Arch. Dermatol. Res.
+Nifedipine,Tween 80,Prop. Glycol,Castor Oil,High Pressure Homog.,138,0.19,-26.2,10 mg/mL,91.9%,Stable,Kommuru et al. (2001) Pharm. Dev. Technol.
+Spironolactone,Tween 20,Ethanol,Sesame Oil,Ultrasonication,150.2,0.21,-23.5,5 mg/mL,93.8%,Stable,Gannu et al. (2010) J. Nanomed.
+Naringenin,Tween 80,PEG 400,Castor Oil,Spontaneous,48,0.12,-24.5,10 mg/mL,96.5%,Stable,Md et al. (2014) J. Pharm. Sci.
+Talinolol,Cremophor EL,Transcutol,Miglyol 812,Titration,105,0.15,-18.2,5 mg/mL,92.8%,Stable,Vinarov et al. (2014) Pharm. Res.
+Cinnamaldehyde,Tween 20,Prop. Glycol,Cinnamon Oil,Ultrasonication,125,0.19,-32.1,100%,N/A,Stable,Li et al. (2015) Food Chem.
+Coenzyme Q10,Lecithin,Span 80,Rice Bran Oil,High Pressure Homog.,165.4,0.22,-38.4,50 mg/mL,94.2%,Stable,Gokce et al. (2010) Int. J. Pharm.
+Loperamide,Labrasol,Ethanol,Capryol 90,Spontaneous,82.3,0.14,-12.6,2 mg/mL,97.1%,Stable,Kotta et al. (2015) Drug Dev. Ind. Pharm.
+Rifampicin,Tween 80,PEG 400,Oleic Acid,Ultrasonication,142,0.18,-22.1,10 mg/mL,89.5%,Stable,Ahmed et al. (2013) J. Drug Target.
+Bicalutamide,Cremophor RH40,Transcutol,Capmul MCM,Titration,110.5,0.11,-29.3,25 mg/mL,98.2%,Stable,Gaur et al. (2014) J. Pharm. Invest.
+Lycopene,Tween 80,N/A,Tomato Seed Oil,High Shear Mix,192,0.24,-33.5,5 mg/mL,91.8%,Stable,Ha et al. (2015) Food Chem.
+Fenofibrate,Labrasol,Prop. Glycol,Labrafil M,Spontaneous,95.8,0.13,-20.4,10 mg/mL,95.4%,Stable,Patel et al. (2010) Drug Deliv.
+Glipizide,Tween 80,Ethanol,Corn Oil,Ultrasonication,155,0.2,-27.8,5 mg/mL,90.6%,Stable,Rizwan et al. (2011) AAPS PharmSciTech
+Itraconazole,Eumulgin CO40,Prop. Glycol,Benzyl Benzoate,Spontaneous,157.5,0.22,-18.4,5 mg,93.5%,Stable,Hong et al. (2006) J. Pharm. Sci.
+Ginger Oil,Tween 80,N/A,Ginger Oil,Ultrasonication,88,0.1,-34.2,100%,N/A,High,Raghavendra et al. (2013) LWT-Food Sci.
+Valsartan,Labrasol,Transcutol,Capryol,Titration,112.4,0.15,-25.7,20 mg/mL,96.8%,Stable,Dixit et al. (2010) AAPS PharmSciTech
+Pioglitazone,Tween 80,PEG 600,Olive Oil,Spontaneous,134,0.17,-14.8,10 mg/mL,92.3%,Stable,Zoubi et al. (2016) J. Nanomed.
+Metformin,Lecithin,Prop. Glycol,MCT Oil,High Pressure Homog.,148,0.21,-36.2,500 mg/mL,98.9%,Stable,Zhang et al. (2014) J. Pharm. Sci.
+Oregano Oil,Tween 80,Ethanol,Oregano Oil,Ultrasonication,94.5,0.11,-28.9,100%,N/A,Stable,Asensio et al. (2015) J. Food Sci.
+Atovaquone,Cremophor EL,PEG 400,Soybean Oil,Phase Inversion,122.6,0.16,-19.5,5 mg/mL,94.1%,Stable,Mantripragada et al. (2002) Prog. Lipid Res.
+Carvedilol,Labrasol,Transcutol,Peppermint Oil,Titration,108,0.12,-31.1,10 mg/mL,95.7%,Stable,Kammari et al. (2007) Drug Dev. Ind. Pharm.
+Rosiglitazone,Tween 20,Prop. Glycol,Isopropyl Palmitate,Spontaneous,115.2,0.14,-23.4,4 mg/mL,93.2%,Stable,Gupta et al. (2011) J. Nanomed.
+Docetaxel,Polysorbate 80,Ethanol,Miglyol 810,Microfluidization,130.5,0.13,-22.8,20 mg/mL,97.6%,Stable,Ganta et al. (2009) J. Control. Release
+Emodin,Tween 80,PEG 400,Labrafil,Spontaneous,145,0.19,-17.5,5 mg/mL,89.2%,Stable,Li et al. (2015) Eur. J. Lipid Sci. Technol.
+Cefixime,Labrasol,Prop. Glycol,Capmul,Titration,128.4,0.16,-26.4,100 mg,91.4%,Stable,Nnamani et al. (2013) Int. J. Nanomed.
+Brimonidine,Tween 80,N/A,Castor Oil,Ultrasonication,118,0.15,-14.2,0.15%,98.1%,Stable,Amrita et al. (2015) Coll. Surf. B.
+Latanoprost,Cremophor EL,PEG 400,IPM,Phase Inversion,105.7,0.12,-20.1,0.005%,99.2%,Stable,Klang et al. (2011) Int. J. Pharm.
+Aceclofenac,Tween 80,Transcutol,Labrafil,Spontaneous,142.1,0.21,-28.5,1.5%,94.5%,Stable,Shakeel et al. (2009) AAPS PharmSciTech
